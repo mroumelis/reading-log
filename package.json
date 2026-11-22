@@ -1,0 +1,9 @@
+{
+  "name": "reading-log",
+  "private": true,
+  "description": "A tiny reading-log PWA. No build step; package.json only exists to run the tests.",
+  "scripts": {
+    "test": "TZ=America/New_York node --test tests/*.test.mjs",
+    "icons": "node tools/make-icons.mjs"
+  }
+}
