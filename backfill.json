@@ -1,0 +1,127 @@
+{
+  "app": "reading-log",
+  "kind": "backfill",
+  "schema": 2,
+  "books": [
+    {
+      "id": "book-as-if-we-were-staying",
+      "title": "As If We Were Staying",
+      "author": "Spencer R. Scott",
+      "archived": false,
+      "createdAt": 1794765600000
+    },
+    {
+      "id": "book-bird-by-bird",
+      "title": "Bird by Bird",
+      "author": "Anne Lamott",
+      "archived": false,
+      "createdAt": 1795284000000
+    }
+  ],
+  "sessions": [
+    {
+      "id": "seed-2026-11-15",
+      "manual": true,
+      "date": "2026-11-15",
+      "type": "book",
+      "title": "As If We Were Staying",
+      "bookId": "book-as-if-we-were-staying",
+      "durationMs": 3600000,
+      "pages": "1-53",
+      "pagesRead": 53,
+      "pagesOverride": null,
+      "note": ""
+    },
+    {
+      "id": "seed-2026-11-16",
+      "manual": true,
+      "date": "2026-11-16",
+      "type": "book",
+      "title": "As If We Were Staying",
+      "bookId": "book-as-if-we-were-staying",
+      "durationMs": 3600000,
+      "pages": "54-106",
+      "pagesRead": 53,
+      "pagesOverride": null,
+      "note": ""
+    },
+    {
+      "id": "seed-2026-11-17",
+      "manual": true,
+      "date": "2026-11-17",
+      "type": "book",
+      "title": "As If We Were Staying",
+      "bookId": "book-as-if-we-were-staying",
+      "durationMs": 3600000,
+      "pages": "107-159",
+      "pagesRead": 53,
+      "pagesOverride": null,
+      "note": ""
+    },
+    {
+      "id": "seed-2026-11-18",
+      "manual": true,
+      "date": "2026-11-18",
+      "type": "book",
+      "title": "As If We Were Staying",
+      "bookId": "book-as-if-we-were-staying",
+      "durationMs": 3600000,
+      "pages": "160-212",
+      "pagesRead": 53,
+      "pagesOverride": null,
+      "note": ""
+    },
+    {
+      "id": "seed-2026-11-19",
+      "manual": true,
+      "date": "2026-11-19",
+      "type": "book",
+      "title": "As If We Were Staying",
+      "bookId": "book-as-if-we-were-staying",
+      "durationMs": 3600000,
+      "pages": "213-265",
+      "pagesRead": 53,
+      "pagesOverride": null,
+      "note": ""
+    },
+    {
+      "id": "seed-2026-11-20",
+      "manual": true,
+      "date": "2026-11-20",
+      "type": "book",
+      "title": "As If We Were Staying",
+      "bookId": "book-as-if-we-were-staying",
+      "durationMs": 3600000,
+      "pages": "266-318",
+      "pagesRead": 53,
+      "pagesOverride": null,
+      "note": ""
+    },
+    {
+      "id": "seed-2026-11-21",
+      "manual": true,
+      "date": "2026-11-21",
+      "type": "book",
+      "title": "Bird by Bird",
+      "bookId": "book-bird-by-bird",
+      "durationMs": 3840000,
+      "pages": "xi-xxxi, 3-32",
+      "pagesRead": 51,
+      "pagesOverride": null,
+      "note": ""
+    },
+    {
+      "id": "seed-2026-11-22",
+      "manual": true,
+      "date": "2026-11-22",
+      "type": "book",
+      "title": "Bird by Bird",
+      "bookId": "book-bird-by-bird",
+      "durationMs": 2760000,
+      "pages": "33-79",
+      "pagesRead": 47,
+      "pagesOverride": null,
+      "note": ""
+    }
+  ]
+}

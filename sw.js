@@ -1,7 +1,7 @@
 // Offline support. Serves the app from the cache instantly, and refreshes the
 // cache in the background so the next launch picks up any new version.
 // When you change the app, bump CACHE so old files are cleared out.
-const CACHE = 'reading-log-v2';
+const CACHE = 'reading-log-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ const ASSETS = [
   './icons/icon-512.png',
   './fonts/silkscreen-700.woff2',
   './fonts/vt323-400.woff2',
+  './backfill.json',
 ];
 
 self.addEventListener('install', (event) => {

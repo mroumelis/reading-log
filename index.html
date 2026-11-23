@@ -163,10 +163,7 @@ svg { display: block; }
 .rec { color: var(--rose); animation: blink 1.2s steps(1) infinite; }
 
 /* pages */
-.pages { display: grid; grid-template-columns: 1fr 30px 1fr; align-items: end; gap: 0 8px; }
-.pages .arrow { padding-bottom: 16px; display: flex; justify-content: center; }
 .pages-sum { margin-top: 16px; font: 24px/1 var(--term); text-transform: uppercase; }
-.pages-sum.err { background: var(--ink); color: var(--rose); padding: 4px 8px; display: inline-block; }
 .mat { font: 30px/1 var(--term); text-transform: uppercase; overflow-wrap: anywhere; }
 
 /* log rows */
@@ -199,7 +196,6 @@ svg { display: block; }
 .legend i.part { background-image: conic-gradient(var(--rose) 25%, var(--paper) 0 50%, var(--rose) 0 75%, var(--paper) 0); background-size: 4px 4px; }
 .dayhdr { display: flex; justify-content: space-between; gap: 10px; background: var(--ink); color: var(--paper); padding: 6px 16px; font: 22px/1 var(--term); text-transform: uppercase; }
 .dayhdr b { color: var(--rose); font-weight: 400; white-space: nowrap; }
-.carried { padding: 10px 16px; color: var(--dim); font: 20px/1.1 var(--term); text-transform: uppercase; }
 
 /* books */
 .addbook { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; }
@@ -245,6 +241,32 @@ svg { display: block; }
 .toast .bi { background: var(--ink); color: var(--paper); padding: 10px 14px; font: 700 13px/1.4 var(--pixel); text-transform: uppercase; text-align: center; }
 .toast.show { visibility: visible; }
 
+/* manual entries, day headers, entry form */
+.tag { flex: none; align-self: center; background: var(--ink); color: var(--paper); font: 700 8px/1 var(--pixel); text-transform: uppercase; padding: 4px 4px 3px; }
+.row { flex-wrap: wrap; }
+.row .pg { flex-basis: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 20px; margin-top: 2px; }
+.row .tag + .name, .row .t + .name { max-width: calc(100% - 120px); }
+.dayhdr { align-items: center; min-height: 44px; padding: 0 0 0 16px; }
+.dh-date { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dh-add { flex: none; width: 48px; height: 44px; display: grid; place-items: center; color: var(--ink); }
+.dh-add span { width: 24px; height: 24px; background: var(--paper); display: grid; place-items: center; clip-path: var(--n2); }
+.dh-add:active span { background: var(--rose); }
+.mb { margin: 0 4px 22px 0; }
+.mt0 { margin-top: 20px; }
+.stepper3 { display: grid; grid-template-columns: 52px 1fr 52px; gap: 12px; align-items: center; margin-right: 4px; }
+.stepper3 .btn .bi { padding: 0; min-height: 44px; }
+.stepper3 .field { margin-right: 0; }
+.stepper3 input, .out { text-align: center; font-size: 28px; }
+.out { display: block; width: 100%; min-height: 44px; line-height: 44px; font-family: var(--term); }
+[data-hold] { -webkit-touch-callout: none; touch-action: none; }
+.field input[type="date"] { display: block; min-height: 44px; line-height: 28px; text-transform: uppercase; }
+.field input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+.field input[type="date"]::-webkit-calendar-picker-indicator { opacity: .6; }
+.sum-err { display: block; margin-top: 8px; background: var(--ink); color: var(--rose); padding: 4px 8px; font-size: 20px; width: fit-content; max-width: 100%; overflow-wrap: anywhere; }
+.sum-hint { display: block; margin-top: 8px; color: var(--dim); font-size: 20px; }
+.stack { display: grid; gap: 14px; margin: 18px 4px 0 0; }
+.small b { color: var(--ink); font-weight: 400; text-decoration: underline; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
@@ -278,16 +300,18 @@ svg { display: block; }
 // Pure, DOM-free logic. Everything time-related takes `now` explicitly so it can be tested.
 (function (root) {
   'use strict';
-  const SCHEMA = 1;
+  const SCHEMA = 2;
   const KEY = 'readinglog.data';
   const TIMER_KEY = 'readinglog.timer';
   const TYPES = ['book', 'article', 'poem'];
   const MIN = 60000;
+  const DEFAULT_DAY_START = 3;
+  const DAY_RE = /^\d{4}-\d\d-\d\d$/;
 
   const pad = (n) => String(n).padStart(2, '0');
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
-  // ----- dates (local time) -----
+  // ----- dates (always the device's local time zone) -----
   function dayKey(ts) {
     const d = new Date(ts);
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -301,23 +325,20 @@ svg { display: block; }
     d.setDate(d.getDate() + n);
     return dayKey(d.getTime());
   }
-  function nextMidnight(ts) {
+  const isDay = (s) => typeof s === 'string' && DAY_RE.test(s) && dayKey(parseDay(s).getTime()) === s;
+  // The "logical" day: before `startHour` on the local clock still counts as the previous date.
+  // Reads the local wall-clock hour, so it's DST-safe (no fixed 3×3600 s subtraction).
+  function logicalDay(ts, startHour) {
+    const h = startHour === undefined ? DEFAULT_DAY_START : startHour;
     const d = new Date(ts);
-    d.setHours(24, 0, 0, 0); // DST-safe: lets the Date object handle 23/25h days
-    return d.getTime();
-  }
-  // Split the interval [a, b) into milliseconds per local day.
-  function splitByDay(a, b, out) {
-    out = out || {};
-    let t = a;
-    while (t < b) {
-      const m = Math.min(nextMidnight(t), b);
-      const k = dayKey(t);
-      out[k] = (out[k] || 0) + (m - t);
-      t = m;
+    if (d.getHours() < h) {
+      d.setHours(12, 0, 0, 0);
+      d.setDate(d.getDate() - 1);
     }
-    return out;
+    return dayKey(d.getTime());
   }
+  const dayStart = (data) => (data && data.settings && Number.isInteger(data.settings.dayStart) ? data.settings.dayStart : DEFAULT_DAY_START);
+  const today = (data, now) => logicalDay(now, dayStart(data));
 
   // ----- timer (timestamp based) -----
   // { status: 'idle'|'running'|'paused', segments: [{start,end}], runStart: ts|null, material?: {type,title,fromPage} }
@@ -346,59 +367,45 @@ svg { display: block; }
   function elapsed(t, now) {
     return segmentsAt(t, now).reduce((s, g) => s + (g.end - g.start), 0);
   }
-  function timerAlloc(t, now) {
-    const out = {};
-    for (const g of segmentsAt(t, now)) splitByDay(g.start, g.end, out);
-    return out;
+  function timerStart(t) {
+    return t.segments.length ? t.segments[0].start : t.status === 'running' ? t.runStart : null;
   }
   // What gets saved when you stop a chunk.
   function draftFromTimer(t, now) {
     const segs = segmentsAt(t, now);
     return {
       durationMs: elapsed(t, now),
-      alloc: timerAlloc(t, now),
       startedAt: segs.length ? segs[0].start : now,
       endedAt: segs.length ? segs[segs.length - 1].end : now,
     };
   }
 
-  // Rescale a per-day allocation to a new total (when you edit the time).
-  function scaleAlloc(alloc, ms, fallbackDay) {
-    const keys = Object.keys(alloc || {}).filter((k) => alloc[k] > 0).sort();
-    const total = keys.reduce((s, k) => s + alloc[k], 0);
-    if (!keys.length || total <= 0) return { [fallbackDay]: ms };
-    const out = {};
-    let acc = 0;
-    keys.forEach((k, i) => {
-      const v = i === keys.length - 1 ? Math.max(0, ms - acc) : Math.round((alloc[k] * ms) / total);
-      out[k] = v;
-      acc += v;
-    });
-    return out;
+  // ----- days, totals, streaks -----
+  // Timed sessions belong to the logical day they STARTED (never split); manual entries keep their stored date.
+  function sessionDay(s, startHour) {
+    return s.manual ? s.date : logicalDay(s.startedAt, startHour);
   }
-  // The day a session is listed under: the (latest) day it counted toward.
-  function sessionDay(s) {
-    const keys = Object.keys(s.alloc || {}).sort();
-    return keys.length ? keys[keys.length - 1] : dayKey(s.endedAt);
-  }
-  function dayTotals(sessions, extraAlloc) {
+  function dayTotals(data, timer, now) {
+    const h = dayStart(data);
     const out = {};
-    for (const s of sessions) for (const k in s.alloc) out[k] = (out[k] || 0) + s.alloc[k];
-    if (extraAlloc) for (const k in extraAlloc) out[k] = (out[k] || 0) + extraAlloc[k];
+    for (const s of data.sessions) { const k = sessionDay(s, h); out[k] = (out[k] || 0) + s.durationMs; }
+    if (timer && timer.status !== 'idle') {
+      const st = timerStart(timer);
+      if (st !== null) { const k = logicalDay(st, h); out[k] = (out[k] || 0) + elapsed(timer, now); }
+    }
     return out;
   }
   function todayTotal(data, timer, now) {
-    const k = dayKey(now);
-    return (dayTotals(data.sessions)[k] || 0) + (timerAlloc(timer, now)[k] || 0);
+    return dayTotals(data, timer, now)[today(data, now)] || 0;
   }
-  function sessionNumber(sessions, todayKey) {
-    return sessions.filter((s) => sessionDay(s) === todayKey).length + 1;
+  function sessionNumber(data, todayKey) {
+    const h = dayStart(data);
+    return data.sessions.filter((s) => !s.manual && sessionDay(s, h) === todayKey).length + 1;
   }
   // The cheering mouse plays once per day, the first time Home is on screen after the goal is hit.
   function shouldCheer(totalMs, goalMs, cheeredDay, todayKey) {
     return totalMs >= goalMs && cheeredDay !== todayKey;
   }
-
   // Current streak of days that hit the goal. Today not hitting yet doesn't break it.
   function streak(totals, todayKey, goalMs) {
     let d = todayKey;
@@ -412,12 +419,76 @@ svg { display: block; }
     for (let i = 6; i >= 0; i--) {
       const k = addDays(todayKey, -i);
       const ms = totals[k] || 0;
-      out.push({ key: k, ms, pct: Math.min(100, Math.round((ms / goalMs) * 100)), hit: ms >= goalMs, today: i === 0 });
+      out.push({ key: k, ms, hit: ms >= goalMs, today: i === 0 });
     }
     return out;
   }
 
-  // ----- books & pages -----
+  // ----- ordering -----
+  // Display order within a day: timed sessions by start time, then manual entries in the order added.
+  function displayOrder(data, list) {
+    const idx = new Map(data.sessions.map((s, i) => [s, i]));
+    return list.slice().sort((a, b) =>
+      (a.manual - b.manual) || (a.manual ? (a.addedAt - b.addedAt) : (a.startedAt - b.startedAt)) || (idx.get(a) - idx.get(b)));
+  }
+  // Reading order (for page tracking): logical day, then when it happened. A manual entry has no
+  // time of day, so it sits at the moment it was added (backfilled ones at midday); that keeps a
+  // past-dated entry after that day's timed sessions, and a timer session tonight after an entry
+  // you typed in this afternoon.
+  function readingKey(s, h, i) {
+    return [sessionDay(s, h), s.manual ? s.addedAt : s.startedAt, i];
+  }
+  const cmpKey = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : (a[1] - b[1]) || (a[2] - b[2]));
+  function readingOrder(data) {
+    const h = dayStart(data);
+    return data.sessions.map((s, i) => ({ s, k: readingKey(s, h, i) })).sort((a, b) => cmpKey(a.k, b.k)).map((x) => x.s);
+  }
+
+  // ----- pages: "xi–xxxi, 3–32", "33-79", "40" -----
+  const ROMAN = { i: 1, v: 5, x: 10, l: 50, c: 100, d: 500, m: 1000 };
+  function intToRoman(n) {
+    const t = [[1000, 'm'], [900, 'cm'], [500, 'd'], [400, 'cd'], [100, 'c'], [90, 'xc'], [50, 'l'], [40, 'xl'], [10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']];
+    let s = '';
+    for (const [v, r] of t) while (n >= v) { s += r; n -= v; }
+    return s;
+  }
+  function romanToInt(str) {
+    const s = String(str).toLowerCase();
+    if (!/^[ivxlcdm]+$/.test(s)) return null;
+    let total = 0;
+    for (let i = 0; i < s.length; i++) {
+      const v = ROMAN[s[i]], n = ROMAN[s[i + 1]] || 0;
+      total += v < n ? -v : v;
+    }
+    return total > 0 && intToRoman(total) === s ? total : null; // rejects "iiii", "vx", …
+  }
+  function parsePage(tok) {
+    const t = tok.trim();
+    if (/^\d+$/.test(t)) return { n: Number(t), roman: false };
+    const r = romanToInt(t);
+    return r === null ? null : { n: r, roman: true };
+  }
+  function parsePages(text) {
+    const out = { ranges: [], errors: [], count: 0, lastArabic: null, empty: true };
+    const parts = String(text || '').split(',').map((p) => p.trim()).filter(Boolean);
+    out.empty = parts.length === 0;
+    for (const p of parts) {
+      const bits = p.split(/\s*[-–—]\s*/);
+      let a, b;
+      if (bits.length === 1) { a = b = parsePage(bits[0]); }
+      else if (bits.length === 2) { a = parsePage(bits[0]); b = parsePage(bits[1]); }
+      if (!a || !b || a.roman !== b.roman) { out.errors.push(p); continue; }
+      if (b.n < a.n) { out.errors.push(p); continue; }
+      out.ranges.push({ start: a.n, end: b.n, roman: a.roman });
+      out.count += b.n - a.n + 1;
+      if (!a.roman) out.lastArabic = b.n;
+    }
+    return out;
+  }
+  const prettyPages = (text) => String(text || '').trim().replace(/\s*[-—]\s*/g, '–').replace(/\s*,\s*/g, ', ');
+  const pagesCount = (s) => (Number.isFinite(s.pagesOverride) ? s.pagesOverride : Number.isFinite(s.pagesRead) ? s.pagesRead : null);
+
+  // ----- books -----
   const normTitle = (s) => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
   function findBook(data, title) {
     const n = normTitle(title);
@@ -427,41 +498,57 @@ svg { display: block; }
   function upsertBook(data, title, now) {
     let b = findBook(data, title);
     if (b) { b.archived = false; return b; }
-    b = { id: uid(), title: String(title).trim().replace(/\s+/g, ' '), archived: false, createdAt: now };
+    b = { id: uid(), title: String(title).trim().replace(/\s+/g, ' '), author: '', archived: false, createdAt: now };
     data.books.push(b);
     return b;
   }
-  // The last end page you logged for a book (by most recent session), ignoring `excludeId`.
-  function lastEndPage(sessions, bookId, excludeId) {
-    let best = null;
-    for (const s of sessions) {
-      if (s.id === excludeId || s.type !== 'book' || s.bookId !== bookId) continue;
-      if (!Number.isFinite(s.endPage)) continue;
-      if (!best || s.endedAt > best.endedAt) best = s;
+  // Last arabic page of a book in reading order. `filter` limits which entries count.
+  function lastPage(data, bookId, filter) {
+    let last = null;
+    for (const s of readingOrder(data)) {
+      if (s.type !== 'book' || s.bookId !== bookId || (filter && !filter(s))) continue;
+      const p = parsePages(s.pages).lastArabic;
+      if (p !== null) last = p;
     }
-    return best ? best.endPage : null;
+    return last;
   }
-  function prefillStartPage(data, title, excludeId) {
+  // Where to pick up: the page after the last arabic page read.
+  //  - opts.date: a new manual entry on that date (counts entries on or before it)
+  //  - opts.beforeId: editing that entry (counts entries before it in reading order)
+  //  - neither: the latest entry overall (timer / Home screen)
+  function pickupPage(data, title, opts) {
     const b = findBook(data, title);
-    return b ? lastEndPage(data.sessions, b.id, excludeId) : null;
-  }
-  function pagesRead(startPage, endPage) {
-    if (!Number.isFinite(startPage) || !Number.isFinite(endPage) || endPage < startPage) return null;
-    return endPage - startPage;
+    if (!b) return null;
+    const h = dayStart(data);
+    let filter = null;
+    if (opts && opts.beforeId) {
+      const i = data.sessions.findIndex((s) => s.id === opts.beforeId);
+      if (i >= 0) {
+        const ref = readingKey(data.sessions[i], h, i);
+        filter = (s) => cmpKey(readingKey(s, h, data.sessions.indexOf(s)), ref) < 0;
+      }
+    } else if (opts && opts.date) {
+      filter = (s) => sessionDay(s, h) <= opts.date;
+    }
+    const p = lastPage(data, b.id, filter);
+    return p === null ? null : p + 1;
   }
   function bookStats(data) {
     const out = {};
-    for (const b of data.books) out[b.id] = { totalMs: 0, count: 0, lastReadAt: 0, lastPage: lastEndPage(data.sessions, b.id) };
-    for (const s of data.sessions) {
+    data.books.forEach((b) => { out[b.id] = { totalMs: 0, count: 0, pages: 0, rank: -1, lastPage: null }; });
+    readingOrder(data).forEach((s, rank) => {
       const st = s.type === 'book' && out[s.bookId];
-      if (!st) continue;
-      st.totalMs += s.durationMs; st.count++; st.lastReadAt = Math.max(st.lastReadAt, s.endedAt);
-    }
+      if (!st) return;
+      st.totalMs += s.durationMs; st.count++; st.rank = rank;
+      st.pages += pagesCount(s) || 0;
+      const p = parsePages(s.pages).lastArabic;
+      if (p !== null) st.lastPage = p;
+    });
     return out;
   }
-  function recentTitles(sessions, type, limit) {
+  function recentTitles(data, type, limit) {
     const seen = new Set(); const out = [];
-    for (const s of sessions.slice().sort((a, b) => b.endedAt - a.endedAt)) {
+    for (const s of readingOrder(data).reverse()) {
       if (s.type !== type) continue;
       const n = normTitle(s.title);
       if (!n || seen.has(n)) continue;
@@ -481,10 +568,6 @@ svg { display: block; }
     const s = Math.floor(Math.max(0, ms) / 1000);
     return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60];
   }
-  function fmtClock(ms) { // 1:05 / 1:01:02
-    const [h, m, s] = hms(ms);
-    return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
-  }
   function fmtCRT(ms) { // 05:12 / 1:05:12 — counts up forever, no cap
     const [h, m, s] = hms(ms);
     return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
@@ -492,6 +575,9 @@ svg { display: block; }
   function fmtHMS(ms) { // 00:38:12
     const [h, m, s] = hms(ms);
     return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  }
+  function fmtHour(h) { // 3 → "3:00 AM"
+    return `${h % 12 === 0 ? 12 : h % 12}:00 ${h < 12 ? 'AM' : 'PM'}`;
   }
 
   // ----- pixel art -----
@@ -559,22 +645,37 @@ svg { display: block; }
   }
 
   // ----- storage -----
-  const freshData = () => ({ schema: SCHEMA, settings: { goalMin: 60, lastExport: null }, books: [], sessions: [] });
+  const freshData = () => ({ schema: SCHEMA, settings: { goalMin: 60, dayStart: DEFAULT_DAY_START, lastExport: null }, books: [], sessions: [] });
   const num = (v) => (v === null || v === undefined || v === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null);
 
   function migrate(obj) {
-    // Schema 0 (pre-versioned) → 1: nothing to transform beyond sanitizing; add future steps here.
     if (!obj.schema) obj.schema = 1;
-    if (obj.schema > SCHEMA) throw new Error(`This backup is from a newer version (schema ${obj.schema}).`);
+    if (obj.schema > SCHEMA) throw new Error(`This file is from a newer version (schema ${obj.schema}).`);
+    // 1 → 2: sessions lose the per-day `alloc` split (they now count for the day they started),
+    // and start/end page numbers become a pages text like "42-79".
+    if (obj.schema === 1 && Array.isArray(obj.sessions)) {
+      for (const s of obj.sessions) {
+        if (!s || typeof s !== 'object') continue;
+        delete s.alloc;
+        if (s.pages === undefined) {
+          const a = num(s.startPage), b = num(s.endPage);
+          s.pages = a !== null && b !== null ? `${a}-${b}` : b !== null ? `${b}` : '';
+        }
+        delete s.startPage; delete s.endPage;
+      }
+      obj.schema = 2;
+    }
     return obj;
   }
   function sanitize(obj) {
-    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('Not a reading log backup.');
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('Not a reading log file.');
     obj = migrate(obj);
     const data = freshData();
     const st = obj.settings || {};
     const g = num(st.goalMin);
     data.settings.goalMin = g && g >= 1 && g <= 1440 ? Math.round(g) : 60;
+    const ds = num(st.dayStart);
+    data.settings.dayStart = Number.isInteger(ds) && ds >= 0 && ds <= 11 ? ds : DEFAULT_DAY_START;
     data.settings.lastExport = num(st.lastExport);
     const seenBooks = new Set();
     for (const b of Array.isArray(obj.books) ? obj.books : []) {
@@ -582,33 +683,41 @@ svg { display: block; }
       const id = typeof b.id === 'string' && b.id ? b.id : uid();
       if (seenBooks.has(id)) continue;
       seenBooks.add(id);
-      data.books.push({ id, title: b.title.trim(), archived: !!b.archived, createdAt: num(b.createdAt) || 0 });
+      data.books.push({ id, title: b.title.trim(), author: typeof b.author === 'string' ? b.author.trim() : '', archived: !!b.archived, createdAt: num(b.createdAt) || 0 });
     }
+    const seenSessions = new Set();
     for (const s of Array.isArray(obj.sessions) ? obj.sessions : []) {
       if (!s || typeof s !== 'object') continue;
       const durationMs = num(s.durationMs);
-      const endedAt = num(s.endedAt);
-      if (durationMs === null || durationMs < 0 || endedAt === null) continue;
-      let alloc = {};
-      if (s.alloc && typeof s.alloc === 'object') {
-        for (const k in s.alloc) if (/^\d{4}-\d\d-\d\d$/.test(k) && num(s.alloc[k]) > 0) alloc[k] = num(s.alloc[k]);
-      }
-      if (!Object.keys(alloc).length) alloc = { [dayKey(endedAt)]: durationMs };
+      if (durationMs === null || durationMs < 0) continue;
+      const id = typeof s.id === 'string' && s.id ? s.id : uid();
+      if (seenSessions.has(id)) continue;
       const type = TYPES.includes(s.type) ? s.type : 'book';
-      const bookId = type === 'book' && seenBooks.has(s.bookId) ? s.bookId : null;
-      data.sessions.push({
-        id: typeof s.id === 'string' && s.id ? s.id : uid(),
-        type, title: typeof s.title === 'string' ? s.title : '', bookId,
-        startPage: type === 'book' ? num(s.startPage) : null,
-        endPage: type === 'book' ? num(s.endPage) : null,
+      const pages = type === 'book' && typeof s.pages === 'string' ? s.pages.slice(0, 200) : '';
+      const parsed = parsePages(pages);
+      const base = {
+        id, type, title: typeof s.title === 'string' ? s.title : '',
+        bookId: type === 'book' && seenBooks.has(s.bookId) ? s.bookId : null,
+        durationMs, pages,
+        pagesRead: parsed.ranges.length ? parsed.count : null,
+        pagesOverride: type === 'book' && num(s.pagesOverride) !== null && num(s.pagesOverride) >= 0 ? Math.round(num(s.pagesOverride)) : null,
         note: typeof s.note === 'string' ? s.note : '',
-        durationMs, alloc,
-        startedAt: num(s.startedAt) ?? endedAt - durationMs, endedAt,
-      });
+      };
+      if (s.manual) {
+        if (!isDay(s.date)) continue;
+        const noon = parseDay(s.date).getTime() + 12 * 3600000;
+        data.sessions.push({ ...base, manual: true, date: s.date, startedAt: null, endedAt: null, addedAt: num(s.addedAt) ?? noon });
+      } else {
+        const endedAt = num(s.endedAt);
+        if (endedAt === null) continue;
+        const startedAt = num(s.startedAt) ?? endedAt - durationMs;
+        data.sessions.push({ ...base, manual: false, date: null, startedAt, endedAt, addedAt: num(s.addedAt) ?? endedAt });
+      }
+      seenSessions.add(id);
     }
     // Book sessions whose book went missing: re-link by title.
     for (const s of data.sessions) {
-      if (s.type === 'book' && !s.bookId && s.title.trim()) s.bookId = upsertBook(data, s.title, s.endedAt).id;
+      if (s.type === 'book' && !s.bookId && s.title.trim()) s.bookId = upsertBook(data, s.title, s.addedAt).id;
     }
     return data;
   }
@@ -655,22 +764,49 @@ svg { display: block; }
   function exportJSON(data, now) {
     return JSON.stringify({ app: 'reading-log', exportedAt: new Date(now).toISOString(), ...data }, null, 2);
   }
-  function importJSON(text) {
+  function parseFile(text) {
     let obj;
     try { obj = JSON.parse(text); } catch (e) { throw new Error('That file isn’t valid JSON.'); }
-    if (!obj || (!Array.isArray(obj.sessions) && !Array.isArray(obj.books))) throw new Error('That doesn’t look like a reading log backup.');
+    if (!obj || (!Array.isArray(obj.sessions) && !Array.isArray(obj.books))) throw new Error('That doesn’t look like a reading log file.');
     return sanitize(obj);
+  }
+  const importJSON = parseFile; // full replace
+  // MERGE: adds books and entries whose ids aren't already here; never changes existing ones,
+  // so importing the same file twice adds nothing the second time. A book whose title already
+  // exists under another id is matched by title (and gets the author filled in if missing).
+  function mergeJSON(data, text) {
+    const inc = parseFile(text);
+    const out = JSON.parse(JSON.stringify(data));
+    const bookMap = {};
+    let books = 0, added = 0, skipped = 0;
+    for (const b of inc.books) {
+      const byId = out.books.find((x) => x.id === b.id);
+      const byTitle = byId || findBook(out, b.title);
+      if (byTitle) {
+        bookMap[b.id] = byTitle.id;
+        if (!byTitle.author && b.author) byTitle.author = b.author;
+      } else { out.books.push(b); bookMap[b.id] = b.id; books++; }
+    }
+    const have = new Set(out.sessions.map((s) => s.id));
+    for (const s of inc.sessions) {
+      if (have.has(s.id)) { skipped++; continue; }
+      if (s.bookId) s.bookId = bookMap[s.bookId] || s.bookId;
+      out.sessions.push(s); have.add(s.id); added++;
+    }
+    return { data: out, added, skipped, books };
   }
 
   root.Core = {
-    SCHEMA, KEY, TIMER_KEY, MIN, TYPES, uid,
-    dayKey, addDays, parseDay, splitByDay,
-    idleTimer, start, pause, stop, segmentsAt, elapsed, timerAlloc, draftFromTimer,
-    scaleAlloc, sessionDay, dayTotals, todayTotal, sessionNumber, shouldCheer, streak, week,
-    normTitle, findBook, upsertBook, lastEndPage, prefillStartPage, pagesRead, bookStats, recentTitles,
-    fmtDur, fmtClock, fmtCRT, fmtHMS,
+    SCHEMA, KEY, TIMER_KEY, MIN, TYPES, DEFAULT_DAY_START, uid,
+    dayKey, addDays, parseDay, isDay, logicalDay, dayStart, today,
+    idleTimer, start, pause, stop, segmentsAt, elapsed, timerStart, draftFromTimer,
+    sessionDay, dayTotals, todayTotal, sessionNumber, shouldCheer, streak, week,
+    displayOrder, readingOrder,
+    romanToInt, intToRoman, parsePages, prettyPages, pagesCount,
+    normTitle, findBook, upsertBook, lastPage, pickupPage, bookStats, recentTitles,
+    fmtDur, fmtCRT, fmtHMS, fmtHour,
     gridRects, svgPixels, MOUSE, MOUSE_COLORS, MOODS, mouseGrid,
-    freshData, sanitize, loadData, saveData, cleanMaterial, loadTimer, saveTimer, exportJSON, importJSON,
+    freshData, sanitize, loadData, saveData, cleanMaterial, loadTimer, saveTimer, exportJSON, importJSON, mergeJSON,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
 /*CORE-END*/
@@ -696,7 +832,8 @@ svg { display: block; }
     gear: ['...X.X...', '.X.XXX.X.', '..XX.XX..', 'XXX...XXX', '.X.....X.', 'XXX...XXX', '..XX.XX..', '.X.XXX.X.', '...X.X...'],
     play: ['X......', 'XXX....', 'XXXXX..', 'XXXXXXX', 'XXXXX..', 'XXX....', 'X......'],
     stop: ['XXXXXX', 'XXXXXX', 'XXXXXX', 'XXXXXX', 'XXXXXX', 'XXXXXX'],
-    arrow: ['....X..', '.....X.', 'XXXXXXX', '.....X.', '....X..'],
+    plus: ['..X..', '..X..', 'XXXXX', '..X..', '..X..'],
+    minus: ['.....', '.....', 'XXXXX', '.....', '.....'],
   };
   const CACTUS = ['...XX...', '..XXXX..', '..XXXX.X', 'X.XXXX.X', 'X.XXXX.X', 'X.XXXXXX', 'XXXXXX..', '..XXXX..', '..XXXX..', '..XXXX..', '..XXXX..', '..XXXX..'];
   const SPARKLE = ['...K...', '...K...', '...K...', 'KKKPKKK', '...K...', '...K...', '...K...'];
@@ -709,8 +846,9 @@ svg { display: block; }
       <div class="wb ${opts.flush ? 'flush' : ''}">${body}</div></div></div></section>`;
   const btn = (label, action, kind, attrs = '') => `<button class="btn ${kind || ''}" data-action="${action}" ${attrs}><span class="bo"><span class="bi">${label}</span></span></button>`;
   const field = (input, extra = '') => `<div class="field" ${extra}><div class="bo"><div class="bi">${input}</div></div></div>`;
-  const seg = (sel, action) => `<div class="seg" role="group" aria-label="Type"><div class="bo"><div class="bi">${C.TYPES.map((t) => `<button data-action="${action}" data-type="${t}" aria-pressed="${t === sel}">${TYPE_LABEL[t]}</button>`).join('')}</div></div></div>`;
+  const seg = (sel, action) => `<div class="seg" role="group" aria-label="Kind"><div class="bo"><div class="bi">${C.TYPES.map((t) => `<button data-action="${action}" data-type="${t}" aria-pressed="${t === sel}">${TYPE_LABEL[t]}</button>`).join('')}</div></div></div>`;
   const chip = (label, action, on, attrs = '', cls = '') => `<button class="chip ${on ? 'on' : ''} ${cls}" data-action="${action}" ${attrs} aria-pressed="${!!on}"><span class="bo"><span class="bi">${label}</span></span></button>`;
+  const holdBtn = (target, d, label) => `<button class="btn" data-hold="${target}" data-d="${d}" aria-label="${label}"><span class="bo"><span class="bi">${icon(d > 0 ? 'plus' : 'minus', 2)}</span></span></button>`;
 
   // localStorage can throw (private mode / disabled). Fall back to memory so the app still works.
   const storage = (() => {
@@ -726,7 +864,7 @@ svg { display: block; }
   const jget = (k) => { try { return JSON.parse(sget(k) || 'null'); } catch (e) { return null; } };
 
   let data, timer;
-  const ui = { tab: 'today', draft: null, save: null, edit: null, mood: null, cheerUntil: 0, archivedOpen: false, lastDay: null, homeState: null };
+  const ui = { tab: 'today', draft: null, save: null, entry: null, mood: null, cheerUntil: 0, archivedOpen: false, lastDay: null, homeState: null, importMode: 'replace' };
 
   function persist() {
     try { C.saveData(storage, data); } catch (e) { toast('Couldn’t save — phone storage full?'); }
@@ -736,7 +874,8 @@ svg { display: block; }
   }
   const persistDraft = () => sset(DRAFT_KEY, JSON.stringify(ui.draft));
   const goalMs = () => data.settings.goalMin * C.MIN;
-  const today = () => C.dayKey(Date.now());
+  const today = () => C.today(data, Date.now());
+  const dayHour = () => C.dayStart(data);
 
   let toastTimer;
   function toast(msg) {
@@ -755,15 +894,11 @@ svg { display: block; }
   }
   const activeBooks = () => {
     const st = C.bookStats(data);
-    return data.books.filter((b) => !b.archived).sort((a, b) => (st[b.id].lastReadAt || b.createdAt) - (st[a.id].lastReadAt || a.createdAt));
-  };
-  const pagesText = (s) => {
-    if (s.type !== 'book') return '';
-    if (Number.isFinite(s.startPage) && Number.isFinite(s.endPage)) return `p.${s.startPage}–${s.endPage}`;
-    if (Number.isFinite(s.endPage)) return `to p.${s.endPage}`;
-    return '';
+    return data.books.filter((b) => !b.archived).sort((a, b) => (st[b.id].rank - st[a.id].rank) || (b.createdAt - a.createdAt));
   };
   const hhmm = (ts) => { const d = new Date(ts); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const fmtDay = (key, opts) => C.parseDay(key).toLocaleDateString('en-US', opts || { weekday: 'short', month: 'short', day: 'numeric' }).replace(/,/g, '').toUpperCase();
+  const readInt = (v) => { const n = parseInt(String(v).trim(), 10); return Number.isFinite(n) && n >= 0 ? n : null; };
 
   // ---------- the mouse ----------
   function currentMood() {
@@ -794,20 +929,58 @@ svg { display: block; }
   function maybeCheer() {
     if (ui.tab !== 'today' || document.visibilityState !== 'visible' || !$('#scene')) return;
     const now = Date.now();
-    if (!C.shouldCheer(C.todayTotal(data, timer, now), goalMs(), sget(CHEER_KEY), C.dayKey(now))) return;
-    sset(CHEER_KEY, C.dayKey(now));
+    const k = today();
+    if (!C.shouldCheer(C.todayTotal(data, timer, now), goalMs(), sget(CHEER_KEY), k)) return;
+    sset(CHEER_KEY, k);
     ui.cheerUntil = now + 4500;
     toast(`Daily goal reached · ${data.settings.goalMin} min`);
   }
 
   // ---------- header & tabs ----------
   function renderHeader() {
-    $('#date').textContent = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '').toUpperCase();
+    $('#date').textContent = fmtDay(today()); // the LOGICAL date
   }
   function renderTabs() {
     const tabs = [['today', 'Today', 'clock'], ['history', 'History', 'cal'], ['books', 'Books', 'books']];
     $('#tabs').innerHTML = tabs.map(([id, label, ic]) => `<button class="tab" role="tab" data-tab="${id}" aria-selected="${ui.tab === id}">${icon(ic, 2)}${label}${id === 'today' ? '<span class="live" id="liveDot" hidden></span>' : ''}</button>`).join('');
   }
+
+  // ---------- material chips (shared by Home and the entry form) ----------
+  function chipsHTML(type, title, target) {
+    const q = C.normTitle(title);
+    let items = type === 'book' ? activeBooks().map((b) => b.title) : C.recentTitles(data, type, 8);
+    if (q && !items.some((t) => C.normTitle(t) === q)) items = items.filter((t) => C.normTitle(t).includes(q));
+    return items.slice(0, 8).map((t) => chip(esc(t), 'chip', C.normTitle(t) === q, `data-title="${esc(t)}" data-target="${target}"`)).join('') +
+      chip('+ New', 'newmat', false, `data-target="${target}"`, 'new');
+  }
+
+  // ---------- pages field (shared by SAVE_SESSION and the entry form) ----------
+  function pagesBlock(p, pages, override, suffix) {
+    return `<label class="lbl" for="${p}Pages">Pages</label>
+      ${field(`<input id="${p}Pages" value="${esc(pages)}" placeholder="33-79  or  xi-xxxi, 3-32" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">`)}
+      <div class="pages-sum" id="${p}Sum" data-suffix="${suffix}"></div>
+      <label class="lbl" for="${p}Over">Pages read (override)</label>
+      ${field(`<input id="${p}Over" inputmode="numeric" pattern="[0-9]*" value="${override ?? ''}" placeholder="optional">`)}`;
+  }
+  function updatePagesSum(p) {
+    const el = $(`#${p}Sum`);
+    if (!el) return;
+    const parsed = C.parsePages($(`#${p}Pages`).value);
+    const over = readInt($(`#${p}Over`).value);
+    const sfx = el.dataset.suffix ? ` ${el.dataset.suffix}` : '';
+    let main;
+    if (over !== null) main = `= ${over} page${over === 1 ? '' : 's'}${sfx} (override)`;
+    else if (parsed.ranges.length) main = `= ${parsed.count} page${parsed.count === 1 ? '' : 's'}${sfx}`;
+    else main = `= ? pages${sfx}`;
+    // "80-" (the prefill, or a range still being typed) is a nudge, not an error.
+    const unfinished = parsed.errors.filter((x) => /^\w+\s*[-–—]$/.test(x));
+    const bad = parsed.errors.filter((x) => !unfinished.includes(x));
+    el.innerHTML = esc(main) +
+      (unfinished.length ? `<span class="sum-hint">Type the end page after ${esc(unfinished[0])}</span>` : '') +
+      (bad.length ? `<span class="sum-err">Can’t read: ${esc(bad.join(', '))}</span>` : '');
+  }
+  // A prefilled "33-" left untouched means "no pages".
+  const finalPages = (text, prefill) => (text.trim() === (prefill || '').trim() ? '' : text.trim());
 
   // ---------- HOME ----------
   function homeState() {
@@ -822,7 +995,7 @@ svg { display: block; }
     else $('#home').innerHTML = win('SAVE_SESSION', saveHTML());
     $('#todayLog').hidden = st === 'save';
     if (st === 'ready') { updateChips(); updatePickup(); }
-    if (st === 'save') updatePagesSum();
+    if (st === 'save') updatePagesSum('s');
     renderTodayLog();
   }
 
@@ -836,20 +1009,13 @@ svg { display: block; }
       <div class="pickup" id="pickup"></div>
       <div class="mt">${btn(icon('play', 2) + 'Start', 'start', 'primary')}</div>`;
   }
-  function updateChips() {
-    const d = ui.draft;
-    const q = C.normTitle(d.title);
-    let items = d.type === 'book' ? activeBooks().map((b) => b.title) : C.recentTitles(data.sessions, d.type, 8);
-    if (q && !items.some((t) => C.normTitle(t) === q)) items = items.filter((t) => C.normTitle(t).includes(q));
-    $('#chips').innerHTML = items.slice(0, 8).map((t) => chip(esc(t), 'chip', C.normTitle(t) === q, `data-title="${esc(t)}"`)).join('') +
-      chip('+ New', 'newmat', false, '', 'new');
-  }
+  const updateChips = () => { $('#chips').innerHTML = chipsHTML(ui.draft.type, ui.draft.title, 'draft'); };
   function updatePickup() {
     const d = ui.draft;
     let html = '';
     if (d.type === 'book' && C.normTitle(d.title)) {
-      const last = C.prefillStartPage(data, d.title);
-      if (last !== null) html = `Pick up at <b>p.${last}</b>`;
+      const p = C.pickupPage(data, d.title);
+      if (p !== null) html = `Pick up at <b>p.${p}</b>`;
       else if (!C.findBook(data, d.title)) html = 'New book · goes on your shelf';
     }
     $('#pickup').innerHTML = html;
@@ -859,7 +1025,7 @@ svg { display: block; }
     const m = timer.material || { type: ui.draft.type, title: '' };
     const meta = [TYPE_LABEL[m.type]];
     if (m.type === 'book' && Number.isFinite(m.fromPage)) meta.push(`FROM p.${m.fromPage}`);
-    const n = C.sessionNumber(data.sessions, today());
+    const n = C.sessionNumber(data, C.logicalDay(C.timerStart(timer) ?? Date.now(), dayHour()));
     return `<div class="scene" id="scene"></div>
       <div class="lbl first">Now reading</div>
       <div class="now-title">${esc(m.title || 'Untitled')}</div>
@@ -876,13 +1042,18 @@ svg { display: block; }
   function saveMaterial() {
     return timer.material || { type: (ui.save && ui.save.type) || ui.draft.type, title: '' };
   }
+  function savePrefill(title) {
+    const p = C.pickupPage(data, title);
+    return p === null ? '' : `${p}-`;
+  }
   function ensureSaveForm() {
-    const key = timer.segments.length ? timer.segments[0].start : 0;
+    const key = C.timerStart(timer) || 0;
     if (ui.save && ui.save.key === key) return ui.save;
     const stored = jget(SAVEFORM_KEY);
-    if (stored && stored.key === key) { ui.save = stored; return ui.save; }
+    if (stored && stored.key === key && typeof stored.pages === 'string') { ui.save = stored; return ui.save; }
     const m = timer.material;
-    ui.save = { key, startPage: m && m.type === 'book' ? C.prefillStartPage(data, m.title) : null, endPage: null, note: '', startTouched: false, title: '', type: ui.draft.type };
+    const prefill = m && m.type === 'book' ? savePrefill(m.title) : '';
+    ui.save = { key, pages: prefill, prefill, pagesTouched: false, override: '', note: '', title: '', type: ui.draft.type };
     return ui.save;
   }
   const persistSaveForm = () => sset(SAVEFORM_KEY, JSON.stringify(ui.save));
@@ -891,7 +1062,6 @@ svg { display: block; }
     const s = ensureSaveForm();
     const m = saveMaterial();
     const ms = C.elapsed(timer, Date.now());
-    const v = (x) => (Number.isFinite(x) ? x : '');
     const type = m.title ? m.type : s.type;
     let html = `<div class="crt" style="margin-top:0"><div class="bo"><div class="bi">
         <div class="crt-top"><span>Time read</span><span>[ stopped ]</span></div>
@@ -902,48 +1072,24 @@ svg { display: block; }
       html += `${seg(s.type, 'stype')}<label class="lbl" for="sTitle">Material</label>
         ${field(`<input id="sTitle" value="${esc(s.title)}" placeholder="What did you read?" autocomplete="off" autocapitalize="words">`, 'id="sTitleField"')}`;
     }
-    if (type === 'book') {
-      html += `<div class="pages">
-          <div><label class="lbl" for="sStart">Start page</label>${field(`<input id="sStart" inputmode="numeric" pattern="[0-9]*" value="${v(s.startPage)}" placeholder="—">`)}</div>
-          <div class="arrow">${icon('arrow', 2)}</div>
-          <div><label class="lbl" for="sEnd">End page</label>${field(`<input id="sEnd" inputmode="numeric" pattern="[0-9]*" value="${v(s.endPage)}" placeholder="—">`)}</div>
-        </div>
-        <div class="pages-sum" id="pagesSum"></div>`;
-    }
+    if (type === 'book') html += pagesBlock('s', s.pages, s.override, 'this session');
     html += `<label class="lbl" for="sNote">Note (optional)</label>
       ${field(`<textarea id="sNote" rows="2" placeholder="A line you loved…">${esc(s.note)}</textarea>`)}
       <div class="btn-row">${btn('Discard', 'discard', '')}${btn('Save', 'save', 'primary')}</div>`;
     return html;
   }
-  const readPage = (id) => {
-    const el = $(id);
-    if (!el || el.value.trim() === '') return null;
-    const n = parseInt(el.value, 10);
-    return Number.isFinite(n) && n >= 0 ? n : null;
-  };
-  function pagesSumText(startPage, endPage) {
-    if (Number.isFinite(startPage) && Number.isFinite(endPage) && endPage < startPage) return ['End page is before start', true];
-    const pr = C.pagesRead(startPage, endPage);
-    return [`= ${pr === null ? '?' : pr} page${pr === 1 ? '' : 's'} this session`, false];
-  }
-  function updatePagesSum() {
-    const el = $('#pagesSum');
-    if (!el) return;
-    const s = ui.save;
-    s.startPage = readPage('#sStart'); s.endPage = readPage('#sEnd');
-    const [txt, bad] = pagesSumText(s.startPage, s.endPage);
-    el.textContent = txt; el.classList.toggle('err', bad);
-  }
 
-  function rowHTML(s, withTime) {
-    const pg = pagesText(s);
-    return `<button class="row ${s.note && !withTime ? 'has-note' : ''}" data-action="edit" data-id="${esc(s.id)}">${withTime ? `<span class="t">${hhmm(s.startedAt)}</span>` : ''}<span class="name">${esc(bookTitle(s))}</span>${pg ? `<span class="pg">${pg}</span>` : ''}<span class="lead"></span><span class="min">${C.fmtDur(s.durationMs)}</span></button>` +
-      (s.note && !withTime ? `<span class="row-note">“${esc(s.note)}”</span>` : '');
+  function rowHTML(s, withNote) {
+    const pg = s.type === 'book' && s.pages ? `p.${C.prettyPages(s.pages)}` : '';
+    const lead = s.manual ? '<span class="tag">Manual</span>' : `<span class="t">${hhmm(s.startedAt)}</span>`;
+    const note = withNote && s.note;
+    return `<button class="row ${note ? 'has-note' : ''}" data-action="edit" data-id="${esc(s.id)}">${lead}<span class="name">${esc(bookTitle(s))}</span><span class="lead"></span><span class="min">${C.fmtDur(s.durationMs)}</span>${pg ? `<span class="pg">${esc(pg)}${Number.isFinite(s.pagesOverride) ? ` · ${s.pagesOverride} pp` : ''}</span>` : ''}</button>` +
+      (note ? `<span class="row-note">“${esc(s.note)}”</span>` : '');
   }
   function renderTodayLog() {
-    const k = today();
-    const list = data.sessions.filter((s) => C.sessionDay(s) === k).sort((a, b) => a.startedAt - b.startedAt);
-    $('#todayLog').innerHTML = win('TODAY\'S LOG', list.length ? `<div class="rows">${list.map((s) => rowHTML(s, true)).join('')}</div>` : '<div class="empty">Nothing yet today.<br>Your book misses you.</div>', { titleId: 'logTitle' });
+    const k = today(), h = dayHour();
+    const list = C.displayOrder(data, data.sessions.filter((s) => C.sessionDay(s, h) === k));
+    $('#todayLog').innerHTML = win('TODAY\'S LOG', list.length ? `<div class="rows">${list.map((s) => rowHTML(s, false)).join('')}</div>` : '<div class="empty">Nothing yet today.<br>Your book misses you.</div>', { titleId: 'logTitle' });
     updateLogTitle();
   }
   function updateLogTitle() {
@@ -956,7 +1102,7 @@ svg { display: block; }
 
   function tick() {
     const now = Date.now();
-    if (C.dayKey(now) !== ui.lastDay) { renderAll(); return; }
+    if (today() !== ui.lastDay) { renderAll(); return; }
     if (ui.tab === 'today') {
       maybeCheer();
       updateScene();
@@ -979,13 +1125,13 @@ svg { display: block; }
     if (key === t) return 'Today';
     if (key === C.addDays(t, -1)) return 'Yesterday';
     const d = C.parseDay(key);
-    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }) }).replace(/,/g, '');
+    return fmtDay(key, { weekday: 'short', month: 'short', day: 'numeric', ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }) });
   }
   function renderHistory() {
     const now = Date.now();
-    const t = C.dayKey(now);
+    const t = today(), h = dayHour();
     const g = goalMs();
-    const totals = C.dayTotals(data.sessions, C.timerAlloc(timer, now));
+    const totals = C.dayTotals(data, timer, now);
     const n = C.streak(totals, t, g);
     const wk = C.week(totals, t, g);
     const weekMs = wk.reduce((s, d) => s + d.ms, 0);
@@ -994,19 +1140,20 @@ svg { display: block; }
       const cls = d.hit ? 'hit' : d.ms > 0 ? 'part' : '';
       return `<div class="wd"><div class="wbox ${cls}" role="img" aria-label="${esc(dayLabel(d.key))}: ${C.fmtDur(d.ms)}${d.hit ? ', goal hit' : ''}"></div><span class="wl ${d.today ? 'today' : ''}">${letter}</span></div>`;
     }).join('');
-    let html = win('THIS_WEEK', `<div class="week">${boxes}</div>
+    let html = win('THIS_WEEK', `<div class="mb">${btn('+ Add entry', 'add-entry', '')}</div>
+      <div class="week">${boxes}</div>
       <div class="stats"><span>Streak: ${n} day${n === 1 ? '' : 's'}</span><span>Week: ${C.fmtDur(weekMs)}</span></div>
       <div class="legend"><span><i class="hit"></i>Goal hit</span><span><i class="part"></i>Partial</span><span><i></i>Missed</span></div>`);
 
-    const saved = C.dayTotals(data.sessions);
+    const saved = C.dayTotals(data);
     const days = Object.keys(saved).sort().reverse();
     const byDay = {};
-    for (const s of data.sessions) (byDay[C.sessionDay(s)] ||= []).push(s);
+    for (const s of data.sessions) (byDay[C.sessionDay(s, h)] ||= []).push(s);
     let log = '';
     for (const k of days) {
-      const list = (byDay[k] || []).sort((a, b) => b.startedAt - a.startedAt);
-      log += `<div class="dayhdr"><span>${esc(dayLabel(k))}</span><b>${C.fmtDur(saved[k])}</b></div>`;
-      log += list.length ? `<div class="rows">${list.map((s) => rowHTML(s, false)).join('')}</div>` : '<div class="carried">Time from a session that ran past midnight</div>';
+      log += `<div class="dayhdr"><span class="dh-date">${esc(dayLabel(k))}</span><b>${C.fmtDur(saved[k])}</b>
+        <button class="dh-add" data-action="add-entry" data-date="${k}" aria-label="Add entry for ${esc(dayLabel(k))}"><span>${icon('plus', 2)}</span></button></div>`;
+      log += `<div class="rows">${C.displayOrder(data, byDay[k] || []).map((s) => rowHTML(s, true)).join('')}</div>`;
     }
     html += win('LOG.TXT', log || '<div class="empty">No entries yet. Your days will stack up here.</div>', { flush: true });
     $('#view-history').innerHTML = html;
@@ -1016,13 +1163,14 @@ svg { display: block; }
   function renderBooks() {
     const stats = C.bookStats(data);
     const active = activeBooks();
-    const archived = data.books.filter((b) => b.archived).sort((a, b) => stats[b.id].lastReadAt - stats[a.id].lastReadAt);
+    const archived = data.books.filter((b) => b.archived).sort((a, b) => stats[b.id].rank - stats[a.id].rank);
     const row = (b) => {
       const s = stats[b.id];
       const meta = [C.fmtDur(s.totalMs)];
       if (s.lastPage !== null) meta.push(`last p.${s.lastPage}`);
-      meta.push(`${s.count} session${s.count === 1 ? '' : 's'}`);
-      return `<div class="brow ${b.archived ? 'archived' : ''}"><div class="brow-main"><div class="brow-title">${esc(b.title)}</div><div class="meta">${esc(meta.join(' · '))}</div></div>
+      if (s.pages) meta.push(`${s.pages} pages`);
+      meta.push(`${s.count} entr${s.count === 1 ? 'y' : 'ies'}`);
+      return `<div class="brow ${b.archived ? 'archived' : ''}"><div class="brow-main"><div class="brow-title">${esc(b.title)}</div>${b.author ? `<div class="meta">${esc(b.author)}</div>` : ''}<div class="meta">${esc(meta.join(' · '))}</div></div>
         ${btn(b.archived ? 'Restore' : 'Archive', b.archived ? 'unarchive' : 'archive', 'sm', `data-id="${esc(b.id)}"`)}</div>`;
     };
     let shelf = `<form class="addbook" id="addBookForm" autocomplete="off">
@@ -1043,9 +1191,18 @@ svg { display: block; }
         ${field(`<input id="gGoal" inputmode="numeric" pattern="[0-9]*" value="${data.settings.goalMin}">`)}
         ${btn('+5', 'goal', '', 'data-d="5" aria-label="Plus 5 minutes"')}${btn('+15', 'goal', '', 'data-d="15" aria-label="Plus 15 minutes"')}
       </div>
+      <div class="lbl">Day starts at</div>
+      <div class="stepper3">
+        ${btn(icon('minus', 2), 'daystart', '', 'data-d="-1" aria-label="An hour earlier"')}
+        ${field(`<output id="gDay" class="out">${C.fmtHour(dayHour())}</output>`)}
+        ${btn(icon('plus', 2), 'daystart', '', 'data-d="1" aria-label="An hour later"')}
+      </div>
+      <div class="small">Reading before ${C.fmtHour(dayHour())} counts toward the day before.</div>
       <div class="btn-row">${btn('Export', 'export', 'dark')}${btn('Import', 'import', '')}</div>
-      <div class="small">${esc(lastTxt)} · ${data.sessions.length} session${data.sessions.length === 1 ? '' : 's'}</div>
-      <div class="note">Data lives <b>only on this phone</b>. Export a backup now and then — save it to Files or iCloud Drive. Import replaces everything.</div>`;
+      <div class="small">${esc(lastTxt)} · ${data.sessions.length} entr${data.sessions.length === 1 ? 'y' : 'ies'}. Import <b>replaces</b> everything with a backup.</div>
+      <div class="stack">${btn('Import entries (merge)', 'import-merge', 'sm')}${btn('Load backfill.json', 'backfill', 'sm')}</div>
+      <div class="small">Merging only adds entries that aren’t here yet — safe to run twice.</div>
+      <div class="note">Data lives <b>only on this phone</b>. Export a backup now and then — save it to Files or iCloud Drive.</div>`;
     $('#view-books').innerHTML = win('SHELF.DB', shelf) + win(`${icon('gear', 2)}PREFS.CFG`, prefs);
   }
   function setGoal(min) {
@@ -1079,87 +1236,168 @@ svg { display: block; }
     persist(); renderBooks();
     toast('Backup ready');
   }
-  function importData(file) {
+  function mergeText(text) {
+    let r;
+    try { r = C.mergeJSON(data, text); } catch (e) { toast(e.message); return; }
+    data = r.data; persist(); renderAll();
+    toast(r.added ? `Added ${r.added} entr${r.added === 1 ? 'y' : 'ies'}${r.skipped ? ` · ${r.skipped} already here` : ''}` : `Nothing new · ${r.skipped} already here`);
+  }
+  function importFile(file) {
     const reader = new FileReader();
     reader.onload = () => {
+      const text = String(reader.result);
+      if (ui.importMode === 'merge') { mergeText(text); return; }
       let next;
-      try { next = C.importJSON(String(reader.result)); } catch (e) { toast(e.message); return; }
-      if (!confirm(`Replace everything with this backup?\n\n${next.sessions.length} sessions, ${next.books.length} books.\nYour current data (${data.sessions.length} sessions) will be replaced.`)) return;
+      try { next = C.importJSON(text); } catch (e) { toast(e.message); return; }
+      if (!confirm(`Replace everything with this backup?\n\n${next.sessions.length} entries, ${next.books.length} books.\nYour current data (${data.sessions.length} entries) will be replaced.`)) return;
       data = next; persist(); renderAll();
       toast('Backup restored');
     };
     reader.onerror = () => toast('Couldn’t read that file');
     reader.readAsText(file);
   }
+  async function loadBackfill() {
+    try {
+      const res = await fetch('backfill.json', { cache: 'no-cache' });
+      if (!res.ok) throw new Error();
+      mergeText(await res.text());
+    } catch (e) { toast('Couldn’t load backfill.json'); }
+  }
 
-  // ---------- EDIT (from a log row) ----------
-  function openEdit(id) {
-    const s = data.sessions.find((x) => x.id === id);
-    if (!s) return;
-    ui.edit = { id, type: s.type, title: bookTitle(s), startPage: s.startPage, endPage: s.endPage, note: s.note, durMs: s.durationMs, origDur: s.durationMs };
-    renderEdit();
+  // ---------- ADD_ENTRY / EDIT_ENTRY ----------
+  function entryPrefill(e) {
+    if (e.type !== 'book' || !C.normTitle(e.title)) return '';
+    const p = e.mode === 'edit' ? C.pickupPage(data, e.title, { beforeId: e.id }) : C.pickupPage(data, e.title, { date: e.date });
+    return p === null ? '' : `${p}-`;
+  }
+  function openEntry(mode, arg) {
+    if (mode === 'edit') {
+      const s = data.sessions.find((x) => x.id === arg);
+      if (!s) return;
+      ui.entry = { mode, id: s.id, manual: s.manual, date: s.manual ? s.date : C.sessionDay(s, dayHour()), startedAt: s.startedAt,
+        type: s.type, title: bookTitle(s), minutes: String(Math.round(s.durationMs / C.MIN)), origMs: s.durationMs,
+        pages: s.pages, prefill: '', pagesTouched: true, override: s.pagesOverride ?? '', note: s.note };
+    } else {
+      const date = arg && arg <= today() ? arg : today();
+      const last = C.readingOrder(data).pop();
+      const type = last ? last.type : ui.draft.type;
+      ui.entry = { mode: 'add', id: null, manual: true, date, startedAt: null, type, title: type === ui.draft.type ? ui.draft.title : '',
+        minutes: '', pages: '', prefill: '', pagesTouched: false, override: '', note: '' };
+      applyEntryPrefill();
+    }
+    renderEntry();
     $('#ov').hidden = false;
     document.body.classList.add('locked');
   }
-  function closeEdit() {
-    $('#ov').hidden = true; ui.edit = null;
+  function applyEntryPrefill() {
+    const e = ui.entry;
+    if (e.pagesTouched) return;
+    e.prefill = entryPrefill(e);
+    e.pages = e.prefill;
+    const el = $('#ePages');
+    if (el) { el.value = e.pages; updatePagesSum('e'); }
+  }
+  function closeEntry() {
+    $('#ov').hidden = true; ui.entry = null;
     document.body.classList.remove('locked');
   }
-  function renderEdit() {
-    const e = ui.edit;
-    const v = (x) => (Number.isFinite(x) ? x : '');
-    const body = `${seg(e.type, 'etype')}
-      <label class="lbl" for="eTitle">Title</label>
-      ${field(`<input id="eTitle" value="${esc(e.title)}" autocomplete="off" autocapitalize="words">`, 'id="eTitleField"')}
-      ${e.type === 'book' ? `<div class="pages">
-          <div><label class="lbl" for="eStart">Start page</label>${field(`<input id="eStart" inputmode="numeric" pattern="[0-9]*" value="${v(e.startPage)}" placeholder="—">`)}</div>
-          <div class="arrow">${icon('arrow', 2)}</div>
-          <div><label class="lbl" for="eEnd">End page</label>${field(`<input id="eEnd" inputmode="numeric" pattern="[0-9]*" value="${v(e.endPage)}" placeholder="—">`)}</div>
-        </div><div class="pages-sum" id="eSum"></div>` : ''}
-      <label class="lbl" for="eMin">Minutes</label>
-      <div class="stepper">
-        ${btn('-5', 'edur', '', 'data-d="-5" aria-label="Minus 5 minutes"')}${btn('-1', 'edur', '', 'data-d="-1" aria-label="Minus 1 minute"')}
-        ${field(`<input id="eMin" inputmode="numeric" pattern="[0-9]*" value="${Math.round(e.durMs / C.MIN)}">`)}
-        ${btn('+1', 'edur', '', 'data-d="1" aria-label="Plus 1 minute"')}${btn('+5', 'edur', '', 'data-d="5" aria-label="Plus 5 minutes"')}
-      </div>
-      <label class="lbl" for="eNote">Note</label>
+  function renderEntry() {
+    const e = ui.entry;
+    const dateBlock = e.manual
+      ? `<label class="lbl first" for="eDate">Date</label>${field(`<input id="eDate" type="date" value="${e.date}" max="${today()}" required>`, 'id="eDateField"')}`
+      : `<div class="lbl first">Timed session</div><div class="meta">${fmtDay(e.date)} · started ${hhmm(e.startedAt)}</div>`;
+    const body = `${dateBlock}
+      <div class="mt0">${seg(e.type, 'etype')}</div>
+      <label class="lbl" for="eTitle">Material</label>
+      ${field(`<input id="eTitle" value="${esc(e.title)}" placeholder="${e.type === 'book' ? 'Which book?' : 'Title'}" autocomplete="off" autocapitalize="words">`, 'id="eTitleField"')}
+      <div class="chips" id="eChips"></div>
+      <label class="lbl" for="eMin">Time read (minutes)</label>
+      <div class="stepper3">${holdBtn('eMin', -1, 'Minus 1 minute')}${field(`<input id="eMin" inputmode="numeric" pattern="[0-9]*" value="${esc(e.minutes)}" placeholder="0">`, 'id="eMinField"')}${holdBtn('eMin', 1, 'Plus 1 minute')}</div>
+      <div class="chips">${[15, 30, 45, 60].map((m) => chip(String(m), 'emin', String(m) === String(e.minutes), `data-v="${m}"`)).join('')}</div>
+      ${e.type === 'book' ? pagesBlock('e', e.pages, e.override, '') : ''}
+      <label class="lbl" for="eNote">Note (optional)</label>
       ${field(`<textarea id="eNote" rows="2">${esc(e.note)}</textarea>`)}
-      <div class="btn-row">${btn('Cancel', 'close-edit', '')}${btn('Save', 'save-edit', 'primary')}</div>
-      <button class="link" data-action="delete">Delete entry</button>`;
-    $('#modal').innerHTML = win('EDIT_SESSION', body, { close: 'close-edit' });
-    updateEditSum();
+      <div class="btn-row">${btn('Cancel', 'close-entry', '')}${btn('Save', 'save-entry', 'primary')}</div>
+      ${e.mode === 'add' ? `<div class="mt">${btn('Save + add another', 'save-another', 'sm')}</div>` : '<button class="link" data-action="delete">Delete entry</button>'}`;
+    $('#modal').innerHTML = win(e.mode === 'add' ? 'ADD_ENTRY' : 'EDIT_ENTRY', body, { close: 'close-entry' });
+    updateEntryChips();
+    updatePagesSum('e');
   }
-  function updateEditSum() {
-    const el = $('#eSum');
-    if (!el) return;
-    const e = ui.edit;
-    e.startPage = readPage('#eStart'); e.endPage = readPage('#eEnd');
-    const [txt, bad] = pagesSumText(e.startPage, e.endPage);
-    el.textContent = txt; el.classList.toggle('err', bad);
+  const updateEntryChips = () => { $('#eChips').innerHTML = chipsHTML(ui.entry.type, ui.entry.title, 'entry'); };
+  function captureEntry() {
+    const e = ui.entry;
+    if ($('#eDate')) e.date = $('#eDate').value;
+    e.title = $('#eTitle').value;
+    e.minutes = $('#eMin').value;
+    e.note = $('#eNote').value;
+    if ($('#ePages')) { e.pages = $('#ePages').value; e.override = $('#eOver').value; }
   }
-  function captureEdit() {
-    const e = ui.edit;
-    e.title = $('#eTitle').value; e.note = $('#eNote').value;
-    updateEditSum();
-  }
-  function saveEdit() {
-    captureEdit();
-    const e = ui.edit;
+  function saveEntry(another) {
+    captureEntry();
+    const e = ui.entry;
     const title = e.title.trim();
+    const min = readInt(e.minutes);
+    if (e.manual && (!C.isDay(e.date) || e.date > today())) { shake($('#eDateField')); toast(e.date > today() ? 'Can’t log the future' : 'Pick a date'); return; }
     if (!title) { shake($('#eTitleField')); toast('Give it a title'); return; }
-    if (!(e.durMs > 0)) { toast('Add at least a minute'); return; }
-    if (e.type === 'book' && Number.isFinite(e.startPage) && Number.isFinite(e.endPage) && e.endPage < e.startPage) { toast('End page is before start'); return; }
-    const s = data.sessions.find((x) => x.id === e.id);
-    if (!s) { closeEdit(); return; }
-    const book = e.type === 'book' ? C.upsertBook(data, title, Date.now()) : null;
-    Object.assign(s, {
+    if (!min) { shake($('#eMinField')); toast('Add the minutes you read'); return; }
+    const now = Date.now();
+    const book = e.type === 'book' ? C.upsertBook(data, title, now) : null;
+    const pages = book ? finalPages(e.pages, e.pagesTouched ? '' : e.prefill) : '';
+    const parsed = C.parsePages(pages);
+    const over = book ? readInt(e.override) : null;
+    const fields = {
       type: e.type, title: book ? book.title : title, bookId: book ? book.id : null,
-      startPage: book ? e.startPage : null, endPage: book ? e.endPage : null, note: e.note.trim(), durationMs: e.durMs,
-    });
-    if (e.durMs !== e.origDur) s.alloc = C.scaleAlloc(s.alloc, e.durMs, C.sessionDay(s));
-    persist(); closeEdit(); renderAll();
-    toast('Updated');
+      pages, pagesRead: parsed.ranges.length ? parsed.count : null, pagesOverride: over, note: e.note.trim(),
+    };
+    if (e.mode === 'edit') {
+      const s = data.sessions.find((x) => x.id === e.id);
+      if (!s) { closeEntry(); return; }
+      const ms = String(Math.round(e.origMs / C.MIN)) === String(min) ? e.origMs : min * C.MIN; // keep seconds if untouched
+      Object.assign(s, fields, { durationMs: ms }, s.manual ? { date: e.date } : {});
+    } else {
+      data.sessions.push({ id: C.uid(), manual: true, date: e.date, startedAt: null, endedAt: null, addedAt: now, durationMs: min * C.MIN, ...fields });
+    }
+    persist();
+    if (another) {
+      ui.entry = { ...e, mode: 'add', id: null, minutes: '', pages: '', prefill: '', pagesTouched: false, override: '', note: '', title: fields.title };
+      applyEntryPrefill();
+      renderEntry();
+      renderAll();
+      $('#ov .wb').scrollTop = 0;
+      toast('Saved · add another');
+      return;
+    }
+    closeEntry(); renderAll();
+    toast(e.mode === 'edit' ? 'Updated' : 'Entry added');
   }
+
+  // Hold-to-repeat for the − / + minute buttons.
+  let holdT = null;
+  function syncMinutes(v) {
+    if (ui.entry) ui.entry.minutes = String(v);
+    for (const c of document.querySelectorAll('[data-action="emin"]')) {
+      const on = c.dataset.v === String(v);
+      c.classList.toggle('on', on); c.setAttribute('aria-pressed', String(on));
+    }
+  }
+  function stepMinutes(target, d) {
+    const el = $('#' + target);
+    if (!el) return;
+    const v = Math.max(0, (readInt(el.value) || 0) + d);
+    el.value = v;
+    syncMinutes(v);
+  }
+  function stopHold() { clearTimeout(holdT); clearInterval(holdT); holdT = null; }
+  document.addEventListener('pointerdown', (e) => {
+    const b = e.target.closest('[data-hold]');
+    if (!b) return;
+    e.preventDefault();
+    stopHold();
+    const step = () => stepMinutes(b.dataset.hold, Number(b.dataset.d));
+    step();
+    holdT = setTimeout(() => { holdT = setInterval(step, 80); }, 420);
+  });
+  ['pointerup', 'pointercancel', 'blur'].forEach((ev) => window.addEventListener(ev, stopHold, true));
 
   // ---------- actions ----------
   function startReading() {
@@ -1168,7 +1406,7 @@ svg { display: block; }
     if (!d.title) { shake($('#matField')); toast('Name what you’re reading'); $('#fMat').focus(); return; }
     persistDraft();
     const book = d.type === 'book' ? C.findBook(data, d.title) : null;
-    const material = { type: d.type, title: book ? book.title : d.title, fromPage: d.type === 'book' ? C.prefillStartPage(data, d.title) : null };
+    const material = { type: d.type, title: book ? book.title : d.title, fromPage: d.type === 'book' ? C.pickupPage(data, d.title) : null };
     if (document.activeElement) document.activeElement.blur();
     timer = C.start(C.idleTimer(), Date.now(), material);
     persistTimer();
@@ -1186,7 +1424,7 @@ svg { display: block; }
     if (!s) return;
     if ($('#sTitle')) s.title = $('#sTitle').value;
     if ($('#sNote')) s.note = $('#sNote').value;
-    updatePagesSum();
+    if ($('#sPages')) { s.pages = $('#sPages').value; s.override = $('#sOver').value; updatePagesSum('s'); }
     persistSaveForm();
   }
   function saveSession() {
@@ -1199,12 +1437,13 @@ svg { display: block; }
     const now = Date.now();
     const d = C.draftFromTimer(timer, now);
     if (!(d.durationMs > 0)) { toast('Nothing timed — discard it'); return; }
-    if (type === 'book' && Number.isFinite(s.startPage) && Number.isFinite(s.endPage) && s.endPage < s.startPage) { shake($('#pagesSum')); toast('End page is before start'); return; }
     const book = type === 'book' ? C.upsertBook(data, title, now) : null;
+    const pages = book ? finalPages(s.pages, s.pagesTouched ? '' : s.prefill) : '';
+    const parsed = C.parsePages(pages);
     data.sessions.push({
-      id: C.uid(), type, title: book ? book.title : title, bookId: book ? book.id : null,
-      startPage: book ? s.startPage : null, endPage: book ? s.endPage : null, note: s.note.trim(),
-      durationMs: d.durationMs, alloc: d.alloc, startedAt: d.startedAt, endedAt: d.endedAt,
+      id: C.uid(), manual: false, date: null, type, title: book ? book.title : title, bookId: book ? book.id : null,
+      pages, pagesRead: parsed.ranges.length ? parsed.count : null, pagesOverride: book ? readInt(s.override) : null, note: s.note.trim(),
+      durationMs: d.durationMs, startedAt: d.startedAt, endedAt: d.endedAt, addedAt: now,
     });
     persist();
     timer = C.idleTimer(); persistTimer();
@@ -1240,44 +1479,59 @@ svg { display: block; }
   }
 
   document.addEventListener('click', (e) => {
-    const el = e.target.closest('[data-action],[data-tab]');
+    const el = e.target.closest('[data-action],[data-tab],[data-hold]');
     if (!el) return;
     if (el.dataset.tab) { setTab(el.dataset.tab); return; }
+    if (el.dataset.hold) { if (e.detail === 0) stepMinutes(el.dataset.hold, Number(el.dataset.d)); return; } // keyboard
     switch (el.dataset.action) {
       case 'dtype':
         ui.draft.type = el.dataset.type; ui.draft.title = ''; persistDraft();
         renderHome(); tick(); break;
-      case 'chip':
-        ui.draft.title = el.dataset.title; $('#fMat').value = el.dataset.title; persistDraft();
-        updateChips(); updatePickup(); break;
-      case 'newmat':
-        ui.draft.title = ''; $('#fMat').value = ''; persistDraft();
-        updateChips(); updatePickup(); $('#fMat').focus(); break;
+      case 'chip': case 'newmat': {
+        const t = el.dataset.action === 'chip' ? el.dataset.title : '';
+        if (el.dataset.target === 'entry') {
+          ui.entry.title = t; $('#eTitle').value = t;
+          if (ui.entry.mode === 'add') ui.entry.pagesTouched = false;
+          updateEntryChips(); applyEntryPrefill();
+          if (!t) $('#eTitle').focus();
+        } else {
+          ui.draft.title = t; $('#fMat').value = t; persistDraft();
+          updateChips(); updatePickup();
+          if (!t) $('#fMat').focus();
+        }
+        break;
+      }
       case 'start': startReading(); break;
       case 'stop': stopReading(); break;
       case 'stype':
         captureSave(); ui.save.type = el.dataset.type; persistSaveForm(); renderHome(); break;
       case 'save': saveSession(); break;
       case 'discard': discardSession(); break;
-      case 'edit': openEdit(el.dataset.id); break;
-      case 'etype': captureEdit(); ui.edit.type = el.dataset.type; renderEdit(); break;
-      case 'edur': {
-        const ed = ui.edit;
-        ed.durMs = Math.max(0, Math.round(ed.durMs / C.MIN) * C.MIN + Number(el.dataset.d) * C.MIN);
-        $('#eMin').value = Math.round(ed.durMs / C.MIN);
-        break;
-      }
-      case 'close-edit': closeEdit(); break;
-      case 'save-edit': saveEdit(); break;
+      case 'edit': openEntry('edit', el.dataset.id); break;
+      case 'add-entry': openEntry('add', el.dataset.date); break;
+      case 'etype':
+        captureEntry(); ui.entry.type = el.dataset.type;
+        if (ui.entry.mode === 'add') { ui.entry.title = ''; ui.entry.pagesTouched = false; ui.entry.pages = ''; }
+        renderEntry(); applyEntryPrefill(); break;
+      case 'emin': stepMinutes('eMin', Number(el.dataset.v) - (readInt($('#eMin').value) || 0)); break;
+      case 'close-entry': closeEntry(); break;
+      case 'save-entry': saveEntry(false); break;
+      case 'save-another': saveEntry(true); break;
       case 'delete':
         if (confirm('Delete this entry? This can’t be undone.')) {
-          data.sessions = data.sessions.filter((x) => x.id !== ui.edit.id);
-          persist(); closeEdit(); renderAll(); toast('Deleted');
+          data.sessions = data.sessions.filter((x) => x.id !== ui.entry.id);
+          persist(); closeEntry(); renderAll(); toast('Deleted');
         }
         break;
       case 'goal': setGoal(data.settings.goalMin + Number(el.dataset.d)); break;
+      case 'daystart':
+        data.settings.dayStart = Math.max(0, Math.min(11, dayHour() + Number(el.dataset.d)));
+        persist(); renderAll(); break;
       case 'export': exportData(); break;
-      case 'import': $('#importFile').value = ''; $('#importFile').click(); break;
+      case 'import': case 'import-merge':
+        ui.importMode = el.dataset.action === 'import' ? 'replace' : 'merge';
+        $('#importFile').value = ''; $('#importFile').click(); break;
+      case 'backfill': loadBackfill(); break;
       case 'archive': case 'unarchive': {
         const b = data.books.find((x) => x.id === el.dataset.id);
         if (b) { b.archived = el.dataset.action === 'archive'; persist(); renderBooks(); toast(b.archived ? 'Archived' : 'Back on the shelf'); }
@@ -1286,32 +1540,35 @@ svg { display: block; }
       case 'toggle-archived': ui.archivedOpen = !ui.archivedOpen; renderBooks(); break;
     }
   });
-  document.getElementById('ov').addEventListener('click', (e) => { if (e.target.id === 'ov') closeEdit(); });
+  document.getElementById('ov').addEventListener('click', (e) => { if (e.target.id === 'ov') closeEntry(); });
 
   document.addEventListener('input', (e) => {
-    switch (e.target.id) {
+    const id = e.target.id;
+    switch (id) {
       case 'fMat': ui.draft.title = e.target.value; persistDraft(); updateChips(); updatePickup(); break;
       case 'sTitle':
         ui.save.title = e.target.value;
-        if (!ui.save.startTouched && ui.save.type === 'book' && $('#sStart')) {
-          const p = C.prefillStartPage(data, e.target.value);
-          $('#sStart').value = p === null ? '' : p;
+        if (!ui.save.pagesTouched && $('#sPages')) {
+          ui.save.prefill = savePrefill(e.target.value); ui.save.pages = ui.save.prefill; $('#sPages').value = ui.save.prefill;
         }
-        updatePagesSum(); persistSaveForm(); break;
-      case 'sStart': ui.save.startTouched = true; updatePagesSum(); persistSaveForm(); break;
-      case 'sEnd': updatePagesSum(); persistSaveForm(); break;
+        updatePagesSum('s'); persistSaveForm(); break;
+      case 'sPages': ui.save.pagesTouched = true; ui.save.pages = e.target.value; updatePagesSum('s'); persistSaveForm(); break;
+      case 'sOver': ui.save.override = e.target.value; updatePagesSum('s'); persistSaveForm(); break;
       case 'sNote': ui.save.note = e.target.value; persistSaveForm(); break;
-      case 'eStart': case 'eEnd': updateEditSum(); break;
-      case 'eMin': { const n = parseInt(e.target.value, 10); ui.edit.durMs = Number.isFinite(n) && n >= 0 ? n * C.MIN : 0; break; }
+      case 'eTitle': ui.entry.title = e.target.value; updateEntryChips(); applyEntryPrefill(); break;
+      case 'eDate': ui.entry.date = e.target.value; applyEntryPrefill(); break;
+      case 'ePages': ui.entry.pagesTouched = true; updatePagesSum('e'); break;
+      case 'eOver': updatePagesSum('e'); break;
+      case 'eMin': syncMinutes(e.target.value.trim()); break;
       case 'gGoal': { const n = parseInt(e.target.value, 10); if (Number.isFinite(n) && n >= 5) setGoal(n); break; }
     }
   });
   document.addEventListener('change', (e) => {
     if (e.target.id === 'gGoal') { setGoal(parseInt(e.target.value, 10)); e.target.value = data.settings.goalMin; }
-    if (e.target.id === 'importFile' && e.target.files[0]) importData(e.target.files[0]);
+    if (e.target.id === 'importFile' && e.target.files[0]) importFile(e.target.files[0]);
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !$('#ov').hidden) closeEdit();
+    if (e.key === 'Escape' && !$('#ov').hidden) closeEntry();
     if (e.key === 'Enter' && e.target.id === 'fMat') { e.preventDefault(); startReading(); }
   });
   document.addEventListener('submit', (e) => {

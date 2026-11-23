@@ -68,8 +68,7 @@ The app updates itself in the background, but the **Home Screen icon and name on
 change when you re-add it**, and re-adding wipes the app's data. So:
 
 1. In the **installed** app: **EXPORT** a backup (BOOKS → PREFS.CFG) and save it to Files.
-   Do this *before* pushing the update if you can; it works either way, because your
-   data format hasn't changed.
+   Old backups still import fine: the app upgrades them automatically.
 2. Push the new version (`git push`) and wait a minute or two for GitHub Pages.
 3. Long-press the old Home Screen icon → **Remove App** → **Delete from Home Screen**.
 4. In Safari, open your URL, pull down to refresh, then Share → **Add to Home Screen**.
@@ -79,7 +78,7 @@ If you don't care about the new icon, you can skip all that: just open the insta
 twice (once to download the update in the background, once to see it).
 
 Developer note: whenever you change files, bump the cache name in `sw.js`
-(`reading-log-v2` → `reading-log-v3`) so old files are cleared out.
+(`reading-log-v3` → `reading-log-v4`) so old files are cleared out.
 
 ## How it works
 
@@ -89,31 +88,46 @@ Developer note: whenever you change files, bump the cache name in `sw.js`
 - **Running.** The mouse reads; the CRT counts up from 00:00 with no cap. The timer is
   based on timestamps, so it keeps counting if your phone locks or you close the app.
   **STOP** ends the chunk (there's no pause — each chunk is one start/stop).
-- **SAVE_SESSION.** Shows the time read. For books: start page (prefilled with your last
-  end page for that book) → end page, and "= N PAGES THIS SESSION". Optional note.
+- **SAVE_SESSION.** Shows the time read. For books, a PAGES field prefilled with where you
+  left off (e.g. `80-`); finish it as `80-95`. It also takes several ranges and roman
+  numerals (`xi-xxxi, 3-32`) and shows "= N PAGES THIS SESSION" (each range counts
+  end − start + 1). An optional PAGES READ number overrides the count. Optional note.
   **SAVE** logs it; **DISCARD** throws the time away. If you close the app on this screen,
   it's still there (with what you typed) when you come back.
 - **TODAY'S LOG.** Today's sessions, with today's total vs. goal in the title bar
   (e.g. `38/60 MIN`, counting the running chunk). When you cross the goal the mouse
   cheers once — right away if the app is open, otherwise the next time you open Home.
-- **Midnight.** If a chunk runs past midnight, the minutes before midnight count toward
-  yesterday and the rest toward today.
-- **HISTORY.** The last 7 days (rose = goal hit, checkerboard = partial, empty = missed),
-  streak and week total, and LOG.TXT grouped by day. Tap any row to edit or delete it.
+- **The day starts at 3:00 AM** (PREFS.CFG → DAY STARTS AT, adjustable by the hour).
+  Reading at 12:37 AM still counts for the day before, and the header shows that date.
+  A timed session counts entirely for the day it *started*, even if it runs past 3 AM.
+  Manual entries keep the date you gave them, even if you change the setting later.
+- **Pick up at p.NN** comes from the last arabic page of the most recent entry for that
+  book, by date (not by when you typed it in), so backdating an old entry never moves it.
+  Roman-numeral front matter never counts as the pickup page.
+- **HISTORY.** **+ ADD ENTRY** logs reading you didn't time (date, kind, title, minutes
+  with − / + and 15/30/45/60 shortcuts, pages, note; **SAVE + ADD ANOTHER** keeps the date
+  and book). Each day bar in LOG.TXT has a **+** for adding to that day. Manual entries
+  show a MANUAL tag and sit below that day's timed sessions. Then the last 7 days
+  (rose = goal hit, checkerboard = partial, empty = missed), streak and week total. Tap
+  any row to edit or delete it.
 - **BOOKS.** Total time, last page and session count per book; add or archive books.
-  PREFS.CFG has the daily goal and export/import.
+  PREFS.CFG has the daily goal, day start, **EXPORT**, **IMPORT** (replaces everything
+  with a backup), **IMPORT ENTRIES** (merges a file in: only adds entries whose ids
+  aren't already there, so it's safe to run twice) and **LOAD BACKFILL.JSON** (merges the
+  `backfill.json` shipped with the app: Nov 15–22, 2026).
 
 ## For tinkering
 
 - **Run it locally:** `python3 -m http.server 8765` in this folder, then open
   <http://localhost:8765>.
-- **Tests:** `npm test` (needs Node 18+). Covers the timer (reload while running,
-  STOP-without-saving, discard, crossing the goal, crossing midnight and a DST night),
-  page prefill, streaks, the mouse grid and its moods, and loading damaged or imported
-  data. The tested logic lives in `index.html` between `/*CORE-START*/` and `/*CORE-END*/`.
+- **Tests:** `npm test` (needs Node 18+, runs in America/Chicago time). Covers the 3 AM
+  day boundary (12:37 AM, 2:59 vs 3:00, both DST nights), roman numerals and page ranges,
+  pickup-page ordering with backdated entries, idempotent import, the backfill totals and
+  streak, the timer (reload while running, STOP-without-saving, discard), v1 → v2 data
+  migration, and the mouse grid. The tested logic lives in `index.html` between `/*CORE-START*/` and `/*CORE-END*/`.
 - **Icons:** `npm run icons` redraws the PNGs from the mouse grid in `index.html`
   (nearest-neighbour, whole pixels per cell).
-- **Storage:** `localStorage` keys `readinglog.data` (schema-versioned, unchanged from
-  v1), `readinglog.timer`, plus small UI keys (`readinglog.draft`, `.saveform`,
+- **Storage:** `localStorage` keys `readinglog.data` (schema 2; v1 data and backups are
+  upgraded on load), `readinglog.timer`, plus small UI keys (`readinglog.draft`, `.saveform`,
   `.cheered`). If saved data is ever unreadable, the raw copy is kept under
   `readinglog.data.corrupt.<time>` and the app starts fresh instead of crashing.
