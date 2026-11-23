@@ -99,34 +99,134 @@ test('today total = saved sessions + running chunk, crossing 60 minutes', () => 
   const after = C.todayTotal(data, t, T + 11 * MIN);
   assert.equal(before, 59 * MIN);
   assert.equal(after, 61 * MIN);
-  assert.ok(C.crossedGoal(before, after, goal));
-  assert.ok(!C.crossedGoal(after, after + MIN, goal), 'only celebrates once');
+  assert.ok(!C.shouldCheer(before, goal, null, '2026-11-22'));
+  assert.ok(C.shouldCheer(after, goal, null, '2026-11-22'), 'cheers once the goal is crossed');
+  assert.ok(C.shouldCheer(after, goal, '2026-11-21', '2026-11-22'), 'yesterday’s cheer doesn’t count for today');
+  assert.ok(!C.shouldCheer(after + 30 * MIN, goal, '2026-11-22', '2026-11-22'), 'only once per day');
 });
 
-test('ring: first lap, goal, then bonus lap that keeps counting', () => {
-  const g = 60 * MIN;
-  let r = C.ringState(30 * MIN, g);
-  assert.equal(r.lap1, 0.5); assert.equal(r.bonus, 0); assert.ok(!r.reached);
-  r = C.ringState(60 * MIN, g);
-  assert.equal(r.lap1, 1); assert.ok(r.reached); assert.ok(!r.isBonus);
-  r = C.ringState(72 * MIN, g);
-  assert.equal(r.lap1, 1); assert.ok(r.isBonus); assert.ok(Math.abs(r.bonus - 0.2) < 1e-9); assert.equal(r.lap, 2);
-  r = C.ringState(120 * MIN, g);
-  assert.equal(r.bonus, 1, 'exactly two laps shows a full bonus ring, not empty');
-  r = C.ringState(150 * MIN, g);
-  assert.equal(r.bonus, 0.5); assert.equal(r.lap, 3);
-  assert.equal(C.totalLabel(30 * MIN, g), '30m of 1h');
-  assert.equal(C.totalLabel(60 * MIN + 20000, g), 'Goal reached!');
-  assert.equal(C.totalLabel(72 * MIN, g), '1h 12m — bonus time!');
+test('timer has no cap: keeps counting well past the goal', () => {
+  const T = at('2026-11-22T08:00');
+  const t = C.start(C.idleTimer(), T);
+  assert.equal(C.fmtCRT(C.elapsed(t, T + 59 * MIN + 59000)), '59:59');
+  assert.equal(C.fmtCRT(C.elapsed(t, T + 60 * MIN)), '1:00:00');
+  assert.equal(C.fmtCRT(C.elapsed(t, T + 135 * MIN + 7000)), '2:15:07');
 });
 
 test('formatting', () => {
   assert.equal(C.fmtClock(0), '0:00');
   assert.equal(C.fmtClock(65 * 1000), '1:05');
   assert.equal(C.fmtClock(61 * MIN + 2000), '1:01:02');
+  assert.equal(C.fmtCRT(0), '00:00');
+  assert.equal(C.fmtCRT(5 * MIN + 12000), '05:12');
+  assert.equal(C.fmtHMS(38 * MIN + 12000), '00:38:12');
   assert.equal(C.fmtDur(40 * 1000), '<1m');
   assert.equal(C.fmtDur(59 * MIN + 59 * 1000), '59m');
   assert.equal(C.fmtDur(120 * MIN), '2h');
+});
+
+// ---------------- STOP / save flow ----------------
+const HOBBIT = { type: 'book', title: 'The Hobbit', fromPage: 42 };
+
+test('start carries the material; stop keeps it and freezes the time', () => {
+  const T = at('2026-11-22T09:00');
+  let t = C.start(C.idleTimer(), T, HOBBIT);
+  assert.deepEqual(plain(t.material), HOBBIT);
+  t = C.stop(t, T + 38 * MIN + 12000);
+  assert.equal(t.status, 'paused');
+  assert.deepEqual(plain(t.material), HOBBIT);
+  assert.equal(C.fmtHMS(C.elapsed(t, T + 999 * MIN)), '00:38:12', 'a stopped chunk does not keep counting');
+});
+
+test('STOP without saving, then reload: the unsaved chunk comes back intact', () => {
+  const st = memStorage();
+  const T = at('2026-11-22T09:00');
+  C.saveTimer(st, C.stop(C.start(C.idleTimer(), T, HOBBIT), T + 20 * MIN));
+  // ... app closed for hours ...
+  const r = C.loadTimer(st);
+  assert.equal(r.status, 'paused');
+  assert.equal(C.elapsed(r, T + 600 * MIN), 20 * MIN);
+  assert.deepEqual(plain(r.material), HOBBIT);
+  const d = C.draftFromTimer(r, T + 600 * MIN);
+  assert.equal(d.endedAt, T + 20 * MIN, 'saved session ends when STOP was pressed, not when it was saved');
+});
+
+test('STOP then discard leaves nothing behind', () => {
+  const st = memStorage();
+  const data = C.freshData();
+  const T = at('2026-11-22T09:00');
+  C.saveTimer(st, C.stop(C.start(C.idleTimer(), T, HOBBIT), T + 20 * MIN));
+  C.saveTimer(st, C.idleTimer()); // discard
+  const r = C.loadTimer(st);
+  assert.equal(r.status, 'idle');
+  assert.equal(C.todayTotal(data, r, T + 30 * MIN), 0, 'discarded time no longer counts toward today');
+});
+
+test('a stopped-but-unsaved chunk still counts toward today until discarded', () => {
+  const T = at('2026-11-22T09:00');
+  const t = C.stop(C.start(C.idleTimer(), T, HOBBIT), T + 25 * MIN);
+  assert.equal(C.todayTotal(C.freshData(), t, T + 90 * MIN), 25 * MIN);
+});
+
+test('STOP immediately gives a zero-length chunk (nothing to save)', () => {
+  const T = at('2026-11-22T09:00');
+  const t = C.stop(C.start(C.idleTimer(), T, HOBBIT), T);
+  assert.equal(C.draftFromTimer(t, T).durationMs, 0);
+});
+
+test('a timer saved by the old version (no material) still loads', () => {
+  const st = memStorage();
+  st.setItem(C.TIMER_KEY, JSON.stringify({ status: 'running', segments: [], runStart: at('2026-11-22T09:00') }));
+  const r = C.loadTimer(st);
+  assert.equal(r.status, 'running');
+  assert.equal(r.material, undefined);
+  st.setItem(C.TIMER_KEY, JSON.stringify({ status: 'running', segments: [], runStart: 1, material: { type: 'novel', title: 5 } }));
+  assert.equal(C.loadTimer(st).material, undefined, 'junk material is dropped');
+});
+
+test('session number counts today’s saved sessions', () => {
+  const s = (day) => ({ alloc: { [day]: MIN }, endedAt: 0 });
+  assert.equal(C.sessionNumber([s('2026-11-22'), s('2026-11-21'), s('2026-11-22')], '2026-11-22'), 3);
+  assert.equal(C.sessionNumber([], '2026-11-22'), 1);
+});
+
+// ---------------- the mouse ----------------
+test('mouse grid is 24×24 and only uses the legend colours', () => {
+  assert.equal(C.MOUSE.length, 24);
+  for (const row of C.MOUSE) { assert.equal(row.length, 24); assert.match(row, /^[KGPW.]+$/); }
+});
+
+test('mood overrides', () => {
+  const at2 = (g, x, y) => g[y][x];
+  const sleep = C.mouseGrid('sleeping');
+  assert.equal(sleep[9].slice(6, 8), 'KK'); assert.equal(sleep[9].slice(14, 16), 'KK');
+  const read = C.mouseGrid('reading');
+  assert.equal(read[15].slice(7, 15), 'KKKKKKKK');
+  assert.equal(read[16].slice(7, 15), 'KWWKKWWK');
+  assert.equal(at2(read, 6, 16), 'P'); assert.equal(at2(read, 15, 16), 'P');
+  const cheer = C.mouseGrid('cheering');
+  assert.equal(at2(cheer, 7, 8), 'K'); assert.equal(at2(cheer, 7, 9), 'G'); assert.equal(at2(cheer, 6, 9), 'K');
+  assert.equal(cheer[13].slice(10, 12), 'KK');
+  assert.deepEqual(plain(C.mouseGrid('base')), plain(C.MOUSE));
+});
+
+test('pixel rects: one per horizontal run, and they redraw the grid exactly', () => {
+  for (const mood of ['base', 'sleeping', 'reading', 'cheering']) {
+    const grid = C.mouseGrid(mood);
+    const rects = C.gridRects(grid, C.MOUSE_COLORS);
+    const back = Array.from({ length: 24 }, () => Array(24).fill('.'));
+    const rev = Object.fromEntries(Object.entries(C.MOUSE_COLORS).map(([k, v]) => [v, k]));
+    for (const r of rects) for (let i = 0; i < r.w; i++) back[r.y][r.x + i] = rev[r.fill];
+    assert.deepEqual(back.map((r) => r.join('')), plain(grid), mood);
+    for (let i = 1; i < rects.length; i++) {
+      const a = rects[i - 1], b = rects[i];
+      assert.ok(!(a.y === b.y && a.x + a.w === b.x && a.fill === b.fill), 'adjacent same-colour runs are merged');
+    }
+  }
+  const svg = C.svgPixels(['XX.X'], { X: '#111111' }, 4);
+  assert.match(svg, /shape-rendering="crispEdges"/);
+  assert.match(svg, /width="16" height="4"/);
+  assert.equal((svg.match(/<rect/g) || []).length, 2);
 });
 
 // ---------------- midnight ----------------

@@ -1,74 +1,49 @@
-// Generates the app icons (PNG) with no dependencies: a violet open book with a
-// little bookmark ribbon, on chartreuse. Run:  node tools/make-icons.mjs
-// Icons are full-bleed squares (iOS rounds the corners itself) and the mark
-// stays inside the central 80% so they also work as "maskable" Android icons.
+// Generates the Home Screen icons (PNG) with no dependencies: the pixel mouse's
+// head and big ears on INK, drawn from the same grid the app uses (read out of
+// index.html) and scaled by a whole number of pixels per cell — nearest-neighbour,
+// so nothing is blurry. Run:  node tools/make-icons.mjs
+// Icons are full-bleed squares (iOS rounds the corners itself) and the head stays
+// inside the central 80% circle so they also work as "maskable" Android icons.
 import { deflateSync } from 'node:zlib';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 
-const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'icons');
-const BG = [0xda, 0xff, 0x72];
-const FG = [0x49, 0x27, 0xd0];
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
+const ctx = {};
+vm.createContext(ctx);
+vm.runInContext(html.split('/*CORE-START*/')[1].split('/*CORE-END*/')[0], ctx);
+const C = ctx.Core;
 
-// Shape test in unit coordinates (0..1, y down). Returns 'fg', 'bg'.
-function shade(x, y) {
-  const spineGap = 0.022;
-  const L0 = 0.17, L1 = 0.5 - spineGap; // left page x-range
-  const R0 = 0.5 + spineGap, R1 = 0.83; // right page x-range
-  const page = (t) => ({
-    // pages droop toward the spine, top edge curves gently like a real book
-    top: 0.33 - 0.07 * Math.sin(Math.PI * t * 0.5 + Math.PI * 0.5) + 0.0,
-    bottom: 0.71 - 0.05 * Math.sin(Math.PI * t * 0.5 + Math.PI * 0.5),
-  });
-  let inPage = false;
-  if (x >= L0 && x <= L1) {
-    const t = (L1 - x) / (L1 - L0); // 0 at spine, 1 at outer edge
-    const p = page(1 - t);
-    inPage = y >= p.top && y <= p.bottom;
-  } else if (x >= R0 && x <= R1) {
-    const t = (x - R0) / (R1 - R0);
-    const p = page(1 - t);
-    inPage = y >= p.top && y <= p.bottom;
-  }
-  // bookmark ribbon on the right page: chartreuse inside the page, violet below it
-  const rx0 = 0.62, rx1 = 0.69;
-  const inRibbonX = x >= rx0 && x <= rx1;
-  if (inRibbonX) {
-    const t = (x - R0) / (R1 - R0);
-    const p = page(1 - t);
-    const ribbonTop = p.top + 0.035;
-    if (inPage && y >= ribbonTop) return 'bg';
-    // tail with a V notch
-    const tailEnd = 0.84;
-    const notch = 0.035 * (1 - Math.abs((x - (rx0 + rx1) / 2) / ((rx1 - rx0) / 2)));
-    if (y > p.bottom && y <= tailEnd - notch) return 'fg';
-  }
-  // a few text lines on the left page (chartreuse cutouts)
-  if (inPage && x >= L0 + 0.05 && x <= L1 - 0.05) {
-    const t = (L1 - x) / (L1 - L0);
-    const p = page(1 - t);
-    for (let i = 0; i < 3; i++) {
-      const ly = p.top + 0.09 + i * 0.075;
-      if (Math.abs(y - ly) < 0.012 && !(i === 2 && x < L0 + 0.13)) return 'bg';
-    }
-  }
-  return inPage ? 'fg' : 'bg';
+const INK = [0x11, 0x11, 0x11];
+const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+
+// Head + ears: rows 0–13, columns 0–21, minus the start of the tail (x ≥ 19 on rows 11–13).
+const grid = C.mouseGrid('base');
+const head = [];
+for (let y = 0; y <= 13; y++) {
+  let row = '';
+  for (let x = 0; x <= 21; x++) row += y >= 11 && x >= 19 ? '.' : grid[y][x];
+  head.push(row);
 }
+const W = head[0].length, H = head.length;
+// Whole pixels per grid cell. 512 stays smaller so the ears fit the maskable safe zone.
+const cellFor = (size) => (size >= 512 ? 15 : Math.floor((size * 0.75) / W));
 
 function render(size) {
-  const ss = 4; // supersampling per axis
+  const cell = cellFor(size);
+  const ox = Math.floor((size - W * cell) / 2);
+  const oy = Math.floor((size - H * cell) / 2);
   const px = Buffer.alloc(size * size * 4);
   for (let j = 0; j < size; j++) {
     for (let i = 0; i < size; i++) {
-      let fg = 0;
-      for (let sy = 0; sy < ss; sy++)
-        for (let sx = 0; sx < ss; sx++)
-          if (shade((i + (sx + 0.5) / ss) / size, (j + (sy + 0.5) / ss) / size) === 'fg') fg++;
-      const a = fg / (ss * ss);
+      const cx = Math.floor((i - ox) / cell), cy = Math.floor((j - oy) / cell);
+      const ch = i >= ox && j >= oy && cx < W && cy < H ? head[cy][cx] : '.';
+      const rgb = C.MOUSE_COLORS[ch] ? hex(C.MOUSE_COLORS[ch]) : INK;
       const o = (j * size + i) * 4;
-      for (let c = 0; c < 3; c++) px[o + c] = Math.round(BG[c] * (1 - a) + FG[c] * a);
-      px[o + 3] = 255;
+      px[o] = rgb[0]; px[o + 1] = rgb[1]; px[o + 2] = rgb[2]; px[o + 3] = 255;
     }
   }
   return png(size, size, px);
@@ -102,8 +77,8 @@ function png(w, h, rgba) {
   ]);
 }
 
-mkdirSync(OUT, { recursive: true });
+mkdirSync(join(ROOT, 'icons'), { recursive: true });
 for (const [name, size] of [['apple-touch-icon.png', 180], ['icon-192.png', 192], ['icon-512.png', 512]]) {
-  writeFileSync(join(OUT, name), render(size));
-  console.log('wrote icons/' + name);
+  writeFileSync(join(ROOT, 'icons', name), render(size));
+  console.log(`wrote icons/${name} (${cellFor(size)}px per cell)`);
 }

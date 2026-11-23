@@ -1,7 +1,7 @@
 // Offline support. Serves the app from the cache instantly, and refreshes the
 // cache in the background so the next launch picks up any new version.
 // When you change the app, bump CACHE so old files are cleared out.
-const CACHE = 'reading-log-v1';
+const CACHE = 'reading-log-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -9,10 +9,12 @@ const ASSETS = [
   './icons/apple-touch-icon.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './fonts/silkscreen-700.woff2',
+  './fonts/vt323-400.woff2',
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {
