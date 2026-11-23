@@ -1,5 +1,5 @@
-// Generates the Home Screen icons (PNG) with no dependencies: the pixel mouse's
-// head and big ears on INK, drawn from the same grid the app uses (read out of
+// Generates the Home Screen icons (PNG) with no dependencies: the pixel mouse
+// on INK, drawn from the same grid the app uses (read out of
 // index.html) and scaled by a whole number of pixels per cell — nearest-neighbour,
 // so nothing is blurry. Run:  node tools/make-icons.mjs
 // Icons are full-bleed squares (iOS rounds the corners itself) and the head stays
@@ -20,17 +20,12 @@ const C = ctx.Core;
 const INK = [0x11, 0x11, 0x11];
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 
-// Head + ears: rows 0–13, columns 0–21, minus the start of the tail (x ≥ 19 on rows 11–13).
-const grid = C.mouseGrid('base');
-const head = [];
-for (let y = 0; y <= 13; y++) {
-  let row = '';
-  for (let x = 0; x <= 21; x++) row += y >= 11 && x >= 19 ? '.' : grid[y][x];
-  head.push(row);
-}
+// The whole resting mouse (14×16), centred on INK.
+const head = C.mouseGrid('base');
 const W = head[0].length, H = head.length;
-// Whole pixels per grid cell. 512 stays smaller so the ears fit the maskable safe zone.
-const cellFor = (size) => (size >= 512 ? 15 : Math.floor((size * 0.75) / W));
+// Whole pixels per grid cell; 512 stays inside the maskable safe zone.
+const cellFor = (size) => (size >= 512 ? 18 : Math.floor((size * 0.72) / H));
+const COLORS = C.MOUSE_COLORS;
 
 function render(size) {
   const cell = cellFor(size);
@@ -41,7 +36,7 @@ function render(size) {
     for (let i = 0; i < size; i++) {
       const cx = Math.floor((i - ox) / cell), cy = Math.floor((j - oy) / cell);
       const ch = i >= ox && j >= oy && cx < W && cy < H ? head[cy][cx] : '.';
-      const rgb = C.MOUSE_COLORS[ch] ? hex(C.MOUSE_COLORS[ch]) : INK;
+      const rgb = COLORS[ch] ? hex(COLORS[ch]) : INK;
       const o = (j * size + i) * 4;
       px[o] = rgb[0]; px[o + 1] = rgb[1]; px[o + 2] = rgb[2]; px[o + 3] = 255;
     }

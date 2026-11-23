@@ -358,29 +358,50 @@ test('empty storage → fresh data; corrupt storage is set aside', () => {
 });
 
 // ---------------- the mouse ----------------
-test('mouse grid is 24×24 and only uses the legend colours', () => {
-  assert.equal(C.MOUSE.length, 24);
-  for (const row of C.MOUSE) { assert.equal(row.length, 24); assert.match(row, /^[KGPW.]+$/); }
+test('mouse grid is 14×16 and only uses the legend colours', () => {
+  assert.equal(C.MOUSE.length, 16);
+  for (const mood of ['base', 'sleep', 'read', 'cool']) {
+    const g = C.mouseGrid(mood);
+    assert.equal(g.length, 16, mood);
+    for (const row of g) { assert.equal(row.length, 14, mood); assert.match(row, /^[KGDPWA.]+$/); }
+  }
+  assert.ok(!C.mouseGrid('base').join('').includes('A'), 'accent only appears on the book');
+  assert.ok(C.mouseGrid('read').join('').includes('A'));
+});
+
+test('mouse colours: light gray fur, light pink, accent only via A', () => {
+  const c = C.mouseColors('#9BBC0F');
+  assert.equal(c.G, '#B7B1AC'); assert.equal(c.P, '#F2A9BE'); assert.equal(c.D, '#8C857F'); assert.equal(c.A, '#9BBC0F');
+  assert.equal(C.MOUSE_COLORS.A, undefined);
 });
 
 test('mood overrides', () => {
-  const px = (g, x, y) => g[y][x];
-  assert.equal(C.mouseGrid('sleeping')[9].slice(6, 8), 'KK');
-  const read = C.mouseGrid('reading');
-  assert.equal(read[16].slice(7, 15), 'KWWKKWWK');
-  assert.equal(px(read, 6, 16), 'P');
-  const cheer = C.mouseGrid('cheering');
-  assert.equal(px(cheer, 7, 8), 'K'); assert.equal(cheer[13].slice(10, 12), 'KK');
+  const sleep = C.mouseGrid('sleep');
+  assert.equal(sleep[5], '.KGKKGKKGK....', 'closed eyes');
+  const cool = C.mouseGrid('cool');
+  assert.equal(cool[5], '.KKWKKKWKK....', 'sunglasses with glints');
+  assert.equal(cool[6], 'KPKKKGKKKK..K.');
+  const read = C.mouseGrid('read');
+  assert.deepEqual(plain(read.slice(0, 7)), plain(C.MOUSE.slice(0, 7)), 'head unchanged');
+  assert.equal(read[11], 'GAAAWDWAAAGKPK');
+  assert.equal(read[15], 'KKKKKKKKKKK...');
 });
 
 test('pixel rects redraw the grid exactly, one per horizontal run', () => {
-  for (const mood of ['base', 'sleeping', 'reading', 'cheering']) {
+  const colors = C.mouseColors('#9BBC0F');
+  const rev = Object.fromEntries(Object.entries(colors).map(([k, v]) => [v, k]));
+  for (const mood of ['base', 'sleep', 'read', 'cool']) {
     const grid = C.mouseGrid(mood);
-    const rects = C.gridRects(grid, C.MOUSE_COLORS);
-    const back = Array.from({ length: 24 }, () => Array(24).fill('.'));
-    const rev = Object.fromEntries(Object.entries(C.MOUSE_COLORS).map(([k, v]) => [v, k]));
+    const rects = C.gridRects(grid, colors);
+    const back = Array.from({ length: 16 }, () => Array(14).fill('.'));
     for (const r of rects) for (let i = 0; i < r.w; i++) back[r.y][r.x + i] = rev[r.fill];
     assert.deepEqual(back.map((r) => r.join('')), plain(grid), mood);
+    for (let i = 1; i < rects.length; i++) {
+      const x = rects[i - 1], y = rects[i];
+      assert.ok(!(x.y === y.y && x.x + x.w === y.x && x.fill === y.fill), 'runs are merged');
+    }
   }
-  assert.match(C.svgPixels(['XX.X'], { X: '#111111' }, 4), /width="16" height="4"/);
+  const svg = C.svgPixels(C.mouseGrid('read'), colors, 6);
+  assert.match(svg, /width="84" height="96"/);
+  assert.match(svg, /shape-rendering="crispEdges"/);
 });

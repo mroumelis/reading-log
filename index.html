@@ -16,6 +16,16 @@
 <link rel="preload" href="fonts/silkscreen-700.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/vt323-400.woff2" as="font" type="font/woff2" crossorigin>
 <title>READ.LOG</title>
+<script>
+// Apply the saved accent before first paint (no flash). Keep in sync with ACCENTS below.
+(function () {
+  var A = { yellow: '#E3B04B', green: '#9BBC0F', blue: '#7DA7D9', red: '#D9604F', mono: '#8A8A8A' };
+  var id = 'green';
+  try { var v = localStorage.getItem('readlog.accent'); if (A[v]) id = v; } catch (e) {}
+  document.documentElement.style.setProperty('--accent', A[id]);
+  document.documentElement.setAttribute('data-accent', id);
+})();
+</script>
 <style>
 @font-face { font-family: "Silkscreen"; src: url("fonts/silkscreen-700.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: block; }
 @font-face { font-family: "VT323"; src: url("fonts/vt323-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: block; }
@@ -26,8 +36,7 @@
   --gray: #8A8A8A;
   --dim: #555555;
   --label: #C8C8C8;
-  --mouse: #9B948F;
-  --rose: #E26A8C;
+  --accent: #9BBC0F; /* overwritten before first paint from readlog.accent */
   --pixel: "Silkscreen", ui-monospace, Menlo, monospace;
   --term: "VT323", ui-monospace, Menlo, monospace;
   --n4: polygon(0 4px, 4px 4px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px));
@@ -59,7 +68,7 @@ svg { display: block; }
 /* ---------- header ---------- */
 .hdr { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 18px; }
 .logo { display: flex; align-items: center; gap: 10px; }
-.logo-sq { width: 14px; height: 14px; background: var(--rose); border: 2px solid var(--ink); flex: none; }
+.logo-sq { width: 14px; height: 14px; background: var(--accent); border: 2px solid var(--ink); flex: none; }
 .logo-txt { font: 700 20px/1 var(--pixel); }
 .date { font: 24px/1 var(--term); white-space: nowrap; }
 
@@ -86,7 +95,7 @@ svg { display: block; }
 .btn { display: block; width: 100%; filter: drop-shadow(4px 4px 0 var(--ink)); transition: transform .12s steps(1), filter .12s steps(1); }
 .btn .bi { min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 0 14px; font: 700 16px/1 var(--pixel); text-transform: uppercase; white-space: nowrap; }
 .btn.primary { filter: drop-shadow(4px 4px 0 var(--gray)); }
-.btn.primary .bi { background: var(--rose); color: var(--ink); }
+.btn.primary .bi { background: var(--accent); color: var(--ink); }
 .btn.dark .bi { background: var(--ink); color: var(--paper); }
 .btn:active { transform: translate(2px, 2px); filter: drop-shadow(2px 2px 0 var(--ink)); }
 .btn.primary:active { filter: drop-shadow(2px 2px 0 var(--gray)); }
@@ -98,7 +107,7 @@ svg { display: block; }
 .seg { filter: drop-shadow(4px 4px 0 var(--ink)); margin-right: 4px; }
 .seg .bi { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; background: var(--ink); }
 .seg button { min-height: 44px; background: var(--paper); font: 700 14px/1 var(--pixel); text-transform: uppercase; text-align: center; }
-.seg button[aria-pressed="true"] { background: var(--rose); }
+.seg button[aria-pressed="true"] { background: var(--accent); }
 .seg button:active { background: var(--mid); }
 
 /* fields */
@@ -117,32 +126,32 @@ svg { display: block; }
 .chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
 .chip { max-width: calc(100% - 4px); filter: drop-shadow(2px 2px 0 var(--ink)); transition: transform .1s steps(1); }
 .chip .bi { background: var(--mid); min-height: 40px; padding: 0 12px; font: 22px/40px var(--term); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chip.on .bi { background: var(--rose); }
+.chip.on .bi { background: var(--accent); }
 .chip:active { transform: translate(2px, 2px); }
 .chip.new { filter: none; }
 .chip.new .bo { background: none; padding: 0; }
 .chip.new .bi { background: var(--paper); border: 2px dashed var(--ink); min-height: 44px; font: 700 13px/40px var(--pixel); }
 .pickup { margin-top: 16px; font: 700 13px/1.5 var(--pixel); text-transform: uppercase; min-height: 20px; }
-.pickup b { background: var(--rose); padding: 0 4px; }
+.pickup b { background: var(--accent); padding: 0 4px; }
 .mt { margin-top: 22px; margin-right: 4px; }
 
 /* scene */
-.scene { position: relative; height: 120px; border-bottom: 2px solid var(--ink); margin: 0 0 20px; }
-.mouse { position: absolute; left: 28px; bottom: 0; width: 96px; height: 96px; }
+.scene { position: relative; height: 100px; border-bottom: 2px solid var(--ink); margin: 0 0 20px; }
+.mouse { position: absolute; left: 24px; bottom: 0; }
 .mouse.bob { animation: bob 1s steps(1) infinite; }
 .mouse.hop { animation: hop .5s steps(1) infinite; }
 @keyframes bob { 0% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 @keyframes hop { 0% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
-.cactus { position: absolute; right: 12px; bottom: 0; width: 32px; height: 48px; }
-.zz { position: absolute; left: 128px; top: 4px; font: 700 13px/1 var(--pixel); }
+.shelf { position: absolute; right: 8px; bottom: 0; }
+.zz { position: absolute; left: 112px; top: 0; font: 700 13px/1 var(--pixel); }
 .zz span { position: absolute; animation: blink 1.6s steps(1) infinite; }
 .zz span:nth-child(1) { left: 0; top: 20px; }
 .zz span:nth-child(2) { left: 14px; top: 4px; animation-delay: .8s; }
 @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0; } }
-.spark { position: absolute; width: 28px; height: 28px; animation: blink .5s steps(1) infinite; }
-.spark.a { left: 0; top: 8px; }
-.spark.b { left: 132px; top: 0; animation-delay: .25s; }
-.scene-cap { position: absolute; left: 132px; bottom: 10px; font: 700 13px/1.3 var(--pixel); text-transform: uppercase; }
+.spark { position: absolute; animation: blink .5s steps(1) infinite; }
+.spark.a { left: 2px; top: 6px; }
+.spark.b { left: 112px; top: 22px; animation-delay: .25s; }
+.scene-cap { position: absolute; left: 140px; top: 26px; font: 700 13px/1.3 var(--pixel); text-transform: uppercase; }
 
 /* now reading */
 .now-title { font: 32px/1 var(--term); text-transform: uppercase; overflow-wrap: anywhere; }
@@ -153,14 +162,14 @@ svg { display: block; }
 .crt .bi {
   background-color: var(--ink);
   background-image: repeating-linear-gradient(to bottom, rgba(255, 255, 255, .06) 0 1px, transparent 1px 3px);
-  color: var(--rose); padding: 12px 14px;
+  color: var(--accent); padding: 12px 14px;
 }
 .crt-top, .crt-bot { display: flex; justify-content: space-between; gap: 8px; font: 700 13px/1 var(--pixel); color: var(--label); text-transform: uppercase; }
 .crt-bot { justify-content: center; margin-top: 4px; }
 .crt-digits { font: 96px/1 var(--term); text-align: center; margin: 10px 0 2px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .crt-digits.long { font-size: 80px; }
 .crt-digits.sm { font-size: 56px; margin: 8px 0 0; }
-.rec { color: var(--rose); animation: blink 1.2s steps(1) infinite; }
+.rec { color: var(--accent); animation: blink 1.2s steps(1) infinite; }
 
 /* pages */
 .pages-sum { margin-top: 16px; font: 24px/1 var(--term); text-transform: uppercase; }
@@ -184,18 +193,18 @@ svg { display: block; }
 .week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .wd { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .wbox { width: 36px; height: 36px; border: 2px solid var(--ink); background: var(--paper); box-shadow: 2px 2px 0 var(--ink); }
-.wbox.hit { background: var(--rose); }
-.wbox.part { background-color: var(--paper); background-image: conic-gradient(var(--rose) 25%, var(--paper) 0 50%, var(--rose) 0 75%, var(--paper) 0); background-size: 8px 8px; }
+.wbox.hit { background: var(--accent); }
+.wbox.part { background-color: var(--paper); background-image: conic-gradient(var(--accent) 25%, var(--paper) 0 50%, var(--accent) 0 75%, var(--paper) 0); background-size: 8px 8px; }
 .wl { font: 700 13px/18px var(--pixel); width: 22px; text-align: center; }
-.wl.today { background: var(--ink); color: var(--rose); }
+.wl.today { background: var(--ink); color: var(--accent); }
 .stats { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; margin-top: 18px; padding-top: 14px; border-top: 2px dotted var(--gray); font: 24px/1.1 var(--term); text-transform: uppercase; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; font: 700 11px/14px var(--pixel); text-transform: uppercase; color: var(--dim); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 14px; height: 14px; border: 2px solid var(--ink); display: inline-block; background: var(--paper); }
-.legend i.hit { background: var(--rose); }
-.legend i.part { background-image: conic-gradient(var(--rose) 25%, var(--paper) 0 50%, var(--rose) 0 75%, var(--paper) 0); background-size: 4px 4px; }
+.legend i.hit { background: var(--accent); }
+.legend i.part { background-image: conic-gradient(var(--accent) 25%, var(--paper) 0 50%, var(--accent) 0 75%, var(--paper) 0); background-size: 4px 4px; }
 .dayhdr { display: flex; justify-content: space-between; gap: 10px; background: var(--ink); color: var(--paper); padding: 6px 16px; font: 22px/1 var(--term); text-transform: uppercase; }
-.dayhdr b { color: var(--rose); font-weight: 400; white-space: nowrap; }
+.dayhdr b { color: var(--accent); font-weight: 400; white-space: nowrap; }
 
 /* books */
 .addbook { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; }
@@ -213,7 +222,7 @@ svg { display: block; }
 .stepper .field { margin-right: 0; }
 .stepper input { text-align: center; font-size: 28px; }
 .note { margin-top: 20px; padding: 12px; background: var(--ink); color: var(--paper); font: 22px/1.15 var(--term); }
-.note b { color: var(--rose); font-weight: 400; }
+.note b { color: var(--accent); font-weight: 400; }
 .small { font: 20px/1.2 var(--term); color: var(--dim); margin-top: 12px; text-transform: uppercase; }
 
 /* modal */
@@ -230,11 +239,12 @@ svg { display: block; }
 
 /* tab bar */
 .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--paper); border-top: 2px solid var(--ink); padding: 0 var(--sr) var(--sb) var(--sl); }
-.tabs { display: grid; grid-template-columns: repeat(3, 1fr); max-width: 520px; margin: 0 auto; height: var(--tab-h); border-left: 2px solid var(--ink); border-right: 2px solid var(--ink); }
-.tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; font: 700 13px/1 var(--pixel); text-transform: uppercase; position: relative; }
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); max-width: 520px; margin: 0 auto; height: var(--tab-h); border-left: 2px solid var(--ink); border-right: 2px solid var(--ink); }
+.tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; font: 700 10px/1 var(--pixel); text-transform: uppercase; position: relative; }
+.tab .ib { height: 24px; display: grid; place-items: center; }
 .tab + .tab { border-left: 2px solid var(--ink); }
-.tab[aria-selected="true"] { background: var(--ink); color: var(--rose); }
-.tab .live { position: absolute; top: 10px; right: calc(50% - 22px); width: 8px; height: 8px; background: var(--rose); border: 2px solid var(--ink); box-sizing: content-box; animation: blink 1.2s steps(1) infinite; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--accent); }
+.tab .live { position: absolute; top: 8px; right: calc(50% - 24px); width: 8px; height: 8px; background: var(--accent); border: 2px solid var(--ink); box-sizing: content-box; animation: blink 1.2s steps(1) infinite; }
 
 /* toast */
 .toast { position: fixed; left: 50%; bottom: calc(var(--sb) + var(--tab-h) + 22px); z-index: 50; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 40px); pointer-events: none; filter: drop-shadow(4px 4px 0 var(--gray)); visibility: hidden; }
@@ -250,7 +260,7 @@ svg { display: block; }
 .dh-date { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dh-add { flex: none; width: 48px; height: 44px; display: grid; place-items: center; color: var(--ink); }
 .dh-add span { width: 24px; height: 24px; background: var(--paper); display: grid; place-items: center; clip-path: var(--n2); }
-.dh-add:active span { background: var(--rose); }
+.dh-add:active span { background: var(--accent); }
 .mb { margin: 0 4px 22px 0; }
 .mt0 { margin-top: 20px; }
 .stepper3 { display: grid; grid-template-columns: 52px 1fr 52px; gap: 12px; align-items: center; margin-right: 4px; }
@@ -262,10 +272,34 @@ svg { display: block; }
 .field input[type="date"] { display: block; min-height: 44px; line-height: 28px; text-transform: uppercase; }
 .field input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .field input[type="date"]::-webkit-calendar-picker-indicator { opacity: .6; }
-.sum-err { display: block; margin-top: 8px; background: var(--ink); color: var(--rose); padding: 4px 8px; font-size: 20px; width: fit-content; max-width: 100%; overflow-wrap: anywhere; }
+.sum-err { display: block; margin-top: 8px; background: var(--ink); color: var(--accent); padding: 4px 8px; font-size: 20px; width: fit-content; max-width: 100%; overflow-wrap: anywhere; }
 .sum-hint { display: block; margin-top: 8px; color: var(--dim); font-size: 20px; }
 .stack { display: grid; gap: 14px; margin: 18px 4px 0 0; }
 .small b { color: var(--ink); font-weight: 400; text-decoration: underline; }
+
+/* settings */
+.help { font: 700 11px/1.5 var(--pixel); text-transform: uppercase; color: var(--dim); }
+.tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 16px 4px 0 0; }
+.tile { display: block; min-width: 0; filter: drop-shadow(2px 2px 0 var(--ink)); transition: transform .1s steps(1); }
+.tile:active { transform: translate(2px, 2px); }
+.tile .bi { background: var(--mid); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 3px 6px; }
+.tile svg { display: block; }
+.swatch { display: block; width: 100%; height: 22px; border: 2px solid var(--ink); }
+.tile-lbl { font: 700 9px/1 var(--pixel); text-transform: uppercase; padding: 3px 2px 2px; }
+.tile.on { filter: drop-shadow(3px 3px 0 var(--ink)); }
+.tile.on > .bo { padding: 3px; }
+.tile.on .bi { background: var(--paper); }
+.tile.on .tile-lbl { background: var(--ink); color: var(--paper); }
+.preview { display: flex; align-items: flex-end; gap: 18px; border-bottom: 2px solid var(--ink); margin-right: 4px; }
+.preview .btn { flex: 1; margin-bottom: 18px; pointer-events: none; }
+.prow { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 64px; padding: 10px 0; border-bottom: 2px dotted var(--gray); }
+.prow:last-of-type { border-bottom: 0; }
+.pl { font: 700 11px/1.3 var(--pixel); text-transform: uppercase; }
+.pctl { display: flex; align-items: center; gap: 8px; margin-right: 4px; }
+.pctl .btn { width: 40px; }
+.pctl .btn .bi { min-height: 40px; padding: 0; }
+.pv { min-width: 78px; text-align: center; font: 24px/1 var(--term); white-space: nowrap; }
+.prow > .btn { width: auto; margin-right: 4px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -285,6 +319,7 @@ svg { display: block; }
     </div>
     <div id="view-history" hidden></div>
     <div id="view-books" hidden></div>
+    <div id="view-settings" hidden></div>
   </main>
 </div>
 
@@ -603,40 +638,46 @@ svg { display: block; }
     return `<svg class="${cls || ''}" viewBox="0 0 ${w} ${h}" width="${w * cell}" height="${h * cell}" shape-rendering="crispEdges" ${a11y}>` +
       gridRects(rows, colors).map((r) => `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="1" fill="${r.fill}"/>`).join('') + '</svg>';
   }
-  const MOUSE_COLORS = { K: '#111111', G: '#9B948F', P: '#E26A8C', W: '#F4F4F4' };
+  // The mascot: 14×16. Fixed colours for fur/pink; `A` is the accent (only on the book).
+  const MOUSE_COLORS = { K: '#111111', G: '#B7B1AC', D: '#8C857F', P: '#F2A9BE', W: '#F4F4F4' };
+  const mouseColors = (accent) => Object.assign({}, MOUSE_COLORS, { A: accent });
   const MOUSE = [
-    '..KKKKKK......KKKKKK....',
-    '.KPPPPPPK....KPPPPPPK...',
-    'KPPPPPPPPK..KPPPPPPPPK..',
-    'KPPPPPPPPK..KPPPPPPPPK..',
-    'KPPPPPPPPK..KPPPPPPPPK..',
-    'KPPPPPPPPKKKKPPPPPPPPK..',
-    '.KKPPPPPKGGGGKPPPPPKK...',
-    '...KKKKKKGGGGKKKKKK.....',
-    '...KGGGGGGGGGGGGGGK.....',
-    '...KGGGKGGGGGGKGGGK.....',
-    '...KGGGGGGGGGGGGGGK.....',
-    '...KGGGGGPPPPGGGGGKKKK..',
-    '...KGGGGGGPPGGGGGGKKPKK.',
-    '....KKGGGGGGGGGGKK.KKPK.',
-    '.....KGGGGGGGGGGK...KPK.',
-    '....KGGGGGGGGGGGGK..KPK.',
-    '....KGGGGGPPGGGGGK..KPK.',
-    '....KGGGGGGGGGGGGK..KPK.',
-    '....KGGGGGGGGGGGGK..KPK.',
-    '....KGGPGGGGGGPGGK..KPK.',
-    '....KGGGGGGGGGGGGK.KKPK.',
-    '....KGGGGGGGGGGGGKKKPKK.',
-    '...KPPPKGGGGGGKPPPKPKK..',
-    '...KKKKKKKKKKKKKKKKKK...',
+    '..KK.....KKK..',
+    '.KPPK...KPPPK.',
+    '.KPPPKKKPPPPK.',
+    '.KPPGGGGGPPPK.',
+    '..KGGGGGGKKK..',
+    '.KGKGGKGGK....',
+    'KPGGGGGGGK..K.',
+    'KGGGGGGGK..KPK',
+    '.KDDDDDK..KPK.',
+    '..KGGGGGK.KPK.',
+    '..KGGGGGK.KPK.',
+    '.KPGGPGGK..KPK',
+    '.KGGGGGGGK.KPK',
+    '.KGGGGGGGKKPK.',
+    'KPPGGPPGGPPK..',
+    'KKKKKKKKKKK...',
   ];
-  const BOOK_ROWS = ['KKKKKKKK', 'KWWKKWWK', 'KWKKKKWK', 'KWWKKWWK', 'KKKKKKKK'];
+  // Rows 7–15 while reading: an open book seen from behind, cover in the accent.
+  const READ_ROWS = [
+    'KGGGGGGGK..KPK',
+    'KKDDDDDK.KKPK.',
+    'KWKKGGGKKWKPK.',
+    'GAWWKKKWWAGPK.',
+    'GAAAWDWAAAGKPK',
+    'KKAAADAAAKKKPK',
+    '.KKKADAKKKKPK.',
+    'KPPGKKKGGPPK..',
+    'KKKKKKKKKKK...',
+  ];
   const MOODS = {
     base: [],
-    sleeping: [[7, 9, 'G'], [14, 9, 'G'], [6, 9, 'K'], [7, 9, 'K'], [14, 9, 'K'], [15, 9, 'K']],
-    reading: BOOK_ROWS.flatMap((row, dy) => row.split('').map((c, dx) => [7 + dx, 15 + dy, c]))
-      .concat([[6, 16, 'P'], [15, 16, 'P']]),
-    cheering: [[7, 9, 'G'], [14, 9, 'G'], [7, 8, 'K'], [14, 8, 'K'], [6, 9, 'K'], [8, 9, 'K'], [13, 9, 'K'], [15, 9, 'K'], [10, 13, 'K'], [11, 13, 'K']],
+    sleep: [[3, 5, 'K'], [4, 5, 'K'], [6, 5, 'K'], [7, 5, 'K']],
+    cool: [2, 3, 4, 5, 6, 7, 8].map((x) => [x, 5, 'K'])
+      .concat([2, 3, 4, 6, 7, 8].map((x) => [x, 6, 'K']))
+      .concat([[3, 5, 'W'], [7, 5, 'W']]),
+    read: READ_ROWS.flatMap((row, dy) => row.split('').map((c, x) => [x, 7 + dy, c])),
   };
   function mouseGrid(mood) {
     const g = MOUSE.map((r) => r.split(''));
@@ -805,7 +846,7 @@ svg { display: block; }
     romanToInt, intToRoman, parsePages, prettyPages, pagesCount,
     normTitle, findBook, upsertBook, lastPage, pickupPage, bookStats, recentTitles,
     fmtDur, fmtCRT, fmtHMS, fmtHour,
-    gridRects, svgPixels, MOUSE, MOUSE_COLORS, MOODS, mouseGrid,
+    gridRects, svgPixels, MOUSE, MOUSE_COLORS, mouseColors, MOODS, mouseGrid,
     freshData, sanitize, loadData, saveData, cleanMaterial, loadTimer, saveTimer, exportJSON, importJSON, mergeJSON,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -835,8 +876,25 @@ svg { display: block; }
     plus: ['..X..', '..X..', 'XXXXX', '..X..', '..X..'],
     minus: ['.....', '.....', 'XXXXX', '.....', '.....'],
   };
-  const CACTUS = ['...XX...', '..XXXX..', '..XXXX.X', 'X.XXXX.X', 'X.XXXX.X', 'X.XXXXXX', 'XXXXXX..', '..XXXX..', '..XXXX..', '..XXXX..', '..XXXX..', '..XXXX..'];
-  const SPARKLE = ['...K...', '...K...', '...K...', 'KKKPKKK', '...K...', '...K...', '...K...'];
+  const ACCENTS = [['yellow', '#E3B04B'], ['green', '#9BBC0F'], ['blue', '#7DA7D9'], ['red', '#D9604F'], ['mono', '#8A8A8A']];
+  const ACCENT_KEY = 'readlog.accent';
+  // Books on a shelf (16×12), right side of the home scene. A = accent.
+  const SHELF = [
+    '................',
+    '............KKKK',
+    '....KKKK....KAAK',
+    '...KGGK.KKKKKAAK',
+    '...KGGK.KWWKKKKK',
+    '..KGGK..KWWKKAAK',
+    '..KWWK..KKKKKAAK',
+    '.KGGK...KWWKKAAK',
+    '.KGGK...KWWKKAAK',
+    'KGGK....KWWKKAAK',
+    'KGGK....KKKKKKKK',
+    'KKKKKKKKKKKKKKKK',
+  ];
+  const GEAR12 = ['....XXXX....', '....XXXX....', '.XX.XXXX.XX.', '.XXXXXXXXXX.', '..XXX..XXX..', 'XXXX....XXXX', 'XXXX....XXXX', '..XXX..XXX..', '.XXXXXXXXXX.', '.XX.XXXX.XX.', '....XXXX....', '....XXXX....'];
+  const SPARKLE = ['...K...', '...K...', '...K...', 'KKKAKKK', '...K...', '...K...', '...K...'];
   const icon = (name, cell, cls) => C.svgPixels(ICON[name], { X: 'currentColor' }, cell || 2, 'ico ' + (cls || ''));
 
   // ---------- markup helpers ----------
@@ -901,21 +959,38 @@ svg { display: block; }
   const readInt = (v) => { const n = parseInt(String(v).trim(), 10); return Number.isFinite(n) && n >= 0 ? n : null; };
 
   // ---------- the mouse ----------
-  function currentMood() {
-    if (Date.now() < ui.cheerUntil) return 'cheering';
-    return timer.status === 'running' ? 'reading' : 'sleeping';
+  const accentId = () => (ACCENTS.some(([id]) => id === ui.accent) ? ui.accent : 'green');
+  const accentHex = (id) => (ACCENTS.find(([k]) => k === (id || accentId())) || ACCENTS[1])[1];
+  function setAccent(id) {
+    if (!ACCENTS.some(([k]) => k === id)) return;
+    ui.accent = id;
+    sset(ACCENT_KEY, id);
+    document.documentElement.style.setProperty('--accent', accentHex(id));
+    document.documentElement.setAttribute('data-accent', id);
+    ui.mood = null; // sprites are SVG with the accent baked in: redraw them
+    renderAll();
   }
-  function sceneHTML(mood) {
-    const anim = mood === 'cheering' ? 'hop' : mood === 'reading' ? 'bob' : '';
-    const label = { sleeping: 'Pixel mouse, asleep', reading: 'Pixel mouse, reading a book', cheering: 'Pixel mouse, cheering' }[mood];
-    let html = C.svgPixels(C.mouseGrid(mood), C.MOUSE_COLORS, 4, 'mouse ' + anim, label);
-    if (mood === 'sleeping') html += '<div class="zz" aria-hidden="true"><span>z</span><span>z</span></div>';
-    if (mood === 'cheering') {
-      html += C.svgPixels(SPARKLE, { K: '#111111', P: '#E26A8C' }, 4, 'spark a');
-      html += C.svgPixels(SPARKLE, { K: '#111111', P: '#E26A8C' }, 4, 'spark b');
+  const mouseSVG = (mood, cell, cls, accent, label) => C.svgPixels(C.mouseGrid(mood), C.mouseColors(accent || accentHex()), cell, cls, label);
+
+  // sleep (no timer) · read (timer running) · cool (today's goal reached; hops for a moment when first hit)
+  function currentMood() {
+    const now = Date.now();
+    if (now < ui.cheerUntil) return 'cool!';
+    if (timer.status === 'running') return 'read';
+    return C.todayTotal(data, timer, now) >= goalMs() ? 'cool' : 'sleep';
+  }
+  function sceneHTML(key) {
+    const mood = key.replace('!', '');
+    const anim = key === 'cool!' ? 'hop' : mood === 'read' ? 'bob' : '';
+    const label = { sleep: 'Pixel mouse, asleep', read: 'Pixel mouse, reading a book', cool: 'Pixel mouse in sunglasses: goal reached' }[mood];
+    let html = mouseSVG(mood, 6, 'mouse ' + anim, null, label);
+    if (mood === 'sleep') html += '<div class="zz" aria-hidden="true"><span>z</span><span>z</span></div>';
+    if (mood === 'cool') {
+      const sp = { K: '#111111', A: accentHex() };
+      html += C.svgPixels(SPARKLE, sp, 3, 'spark a') + C.svgPixels(SPARKLE, sp, 3, 'spark b');
       html += '<div class="scene-cap">goal!</div>';
     }
-    html += C.svgPixels(CACTUS, { X: '#111111' }, 4, 'cactus');
+    html += C.svgPixels(SHELF, { K: '#111111', G: '#B7B1AC', W: '#F4F4F4', A: accentHex() }, 4, 'shelf', 'Books on a shelf');
     return html;
   }
   function updateScene() {
@@ -941,8 +1016,9 @@ svg { display: block; }
     $('#date').textContent = fmtDay(today()); // the LOGICAL date
   }
   function renderTabs() {
-    const tabs = [['today', 'Today', 'clock'], ['history', 'History', 'cal'], ['books', 'Books', 'books']];
-    $('#tabs').innerHTML = tabs.map(([id, label, ic]) => `<button class="tab" role="tab" data-tab="${id}" aria-selected="${ui.tab === id}">${icon(ic, 2)}${label}${id === 'today' ? '<span class="live" id="liveDot" hidden></span>' : ''}</button>`).join('');
+    const tabs = [['today', 'Today', 'clock'], ['history', 'History', 'cal'], ['books', 'Books', 'books'], ['settings', 'Settings', 'gear12']];
+    const tabIcon = (ic) => (ic === 'gear12' ? C.svgPixels(GEAR12, { X: 'currentColor' }, 2, 'ico') : icon(ic, 2));
+    $('#tabs').innerHTML = tabs.map(([id, label, ic]) => `<button class="tab" role="tab" data-tab="${id}" aria-selected="${ui.tab === id}"><span class="ib">${tabIcon(ic)}</span>${label}${id === 'today' ? '<span class="live" id="liveDot" hidden></span>' : ''}</button>`).join('');
   }
 
   // ---------- material chips (shared by Home and the entry form) ----------
@@ -1182,34 +1258,37 @@ svg { display: block; }
       shelf += `<button class="link" data-action="toggle-archived">${ui.archivedOpen ? 'Hide' : 'Show'} archived (${archived.length})</button>`;
       if (ui.archivedOpen) shelf += archived.map(row).join('');
     }
+    $('#view-books').innerHTML = win('SHELF.DB', shelf);
+  }
+
+  // ---------- SETTINGS ----------
+  function renderSettings() {
+    const cur = accentId();
+    const tiles = ACCENTS.map(([id, hex]) => `<button class="tile ${id === cur ? 'on' : ''}" data-action="accent" data-accent="${id}" aria-pressed="${id === cur}" aria-label="${id} accent">
+        <span class="bo"><span class="bi">${mouseSVG('read', 3, '', hex)}<span class="swatch" style="background:${hex}"></span><span class="tile-lbl">${id}</span></span></span></button>`).join('');
+    const accentWin = `<div class="help">Pick one. It colors the book, buttons, timer and streaks. Mono keeps it gray.</div>
+      <div class="tiles">${tiles}</div>
+      <div class="lbl">Live preview</div>
+      <div class="preview">${mouseSVG('read', 6, '')}<div class="btn primary" aria-hidden="true"><span class="bo"><span class="bi">${icon('play', 2)}Start</span></span></div></div>`;
+    const mini = (action, d, label) => btn(icon(d > 0 ? 'plus' : 'minus', 2), action, 'sm', `data-d="${d}" aria-label="${label}"`);
     const last = data.settings.lastExport;
     const ago = last ? Math.floor((Date.now() - last) / 86400000) : null;
     const lastTxt = last === null ? 'No backup yet' : ago === 0 ? 'Last backup: today' : `Last backup: ${ago} day${ago === 1 ? '' : 's'} ago`;
-    const prefs = `<label class="lbl first" for="gGoal">Daily goal (minutes)</label>
-      <div class="stepper">
-        ${btn('-15', 'goal', '', 'data-d="-15" aria-label="Minus 15 minutes"')}${btn('-5', 'goal', '', 'data-d="-5" aria-label="Minus 5 minutes"')}
-        ${field(`<input id="gGoal" inputmode="numeric" pattern="[0-9]*" value="${data.settings.goalMin}">`)}
-        ${btn('+5', 'goal', '', 'data-d="5" aria-label="Plus 5 minutes"')}${btn('+15', 'goal', '', 'data-d="15" aria-label="Plus 15 minutes"')}
-      </div>
-      <div class="lbl">Day starts at</div>
-      <div class="stepper3">
-        ${btn(icon('minus', 2), 'daystart', '', 'data-d="-1" aria-label="An hour earlier"')}
-        ${field(`<output id="gDay" class="out">${C.fmtHour(dayHour())}</output>`)}
-        ${btn(icon('plus', 2), 'daystart', '', 'data-d="1" aria-label="An hour later"')}
-      </div>
-      <div class="small">Reading before ${C.fmtHour(dayHour())} counts toward the day before.</div>
-      <div class="btn-row">${btn('Export', 'export', 'dark')}${btn('Import', 'import', '')}</div>
-      <div class="small">${esc(lastTxt)} · ${data.sessions.length} entr${data.sessions.length === 1 ? 'y' : 'ies'}. Import <b>replaces</b> everything with a backup.</div>
-      <div class="stack">${btn('Import entries (merge)', 'import-merge', 'sm')}${btn('Load backfill.json', 'backfill', 'sm')}</div>
-      <div class="small">Merging only adds entries that aren’t here yet — safe to run twice.</div>
+    const prefs = `
+      <div class="prow"><span class="pl">Daily goal</span><div class="pctl">${mini('goal', -5, 'Goal 5 minutes lower')}<output class="pv" id="gGoal">${data.settings.goalMin} MIN</output>${mini('goal', 5, 'Goal 5 minutes higher')}</div></div>
+      <div class="prow"><span class="pl">Day starts at</span><div class="pctl">${mini('daystart', -1, 'An hour earlier')}<output class="pv" id="gDay">${C.fmtHour(dayHour())}</output>${mini('daystart', 1, 'An hour later')}</div></div>
+      <div class="prow"><span class="pl">Export data</span>${btn('[ JSON ]', 'export', 'sm dark')}</div>
+      <div class="prow"><span class="pl">Restore backup<br><span style="color:var(--dim)">replaces all</span></span>${btn('[ Import ]', 'import', 'sm')}</div>
+      <div class="prow"><span class="pl">Import entries<br><span style="color:var(--dim)">merge, safe twice</span></span>${btn('[ Merge ]', 'import-merge', 'sm')}</div>
+      <div class="prow"><span class="pl">Nov 15–22 backfill</span>${btn('[ Load ]', 'backfill', 'sm')}</div>
+      <div class="small">Reading before ${C.fmtHour(dayHour())} counts for the day before. ${esc(lastTxt)} · ${data.sessions.length} entr${data.sessions.length === 1 ? 'y' : 'ies'}.</div>
       <div class="note">Data lives <b>only on this phone</b>. Export a backup now and then — save it to Files or iCloud Drive.</div>`;
-    $('#view-books').innerHTML = win('SHELF.DB', shelf) + win(`${icon('gear', 2)}PREFS.CFG`, prefs);
+    $('#view-settings').innerHTML = win('ACCENT_COLOR', accentWin) + win('PREFERENCES', prefs);
   }
   function setGoal(min) {
     data.settings.goalMin = Math.max(5, Math.min(600, Math.round(min) || 60));
     persist();
-    const el = $('#gGoal');
-    if (el && document.activeElement !== el) el.value = data.settings.goalMin;
+    renderAll();
   }
   async function exportData() {
     const now = Date.now();
@@ -1233,7 +1312,7 @@ svg { display: block; }
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     }
     data.settings.lastExport = now;
-    persist(); renderBooks();
+    persist(); renderAll();
     toast('Backup ready');
   }
   function mergeText(text) {
@@ -1465,10 +1544,11 @@ svg { display: block; }
     ui.lastDay = today();
     renderHeader();
     for (const b of document.querySelectorAll('.tab')) b.setAttribute('aria-selected', String(b.dataset.tab === ui.tab));
-    for (const v of ['today', 'history', 'books']) $('#view-' + v).hidden = v !== ui.tab;
+    for (const v of ['today', 'history', 'books', 'settings']) $('#view-' + v).hidden = v !== ui.tab;
     if (ui.tab === 'today') renderHome();
     if (ui.tab === 'history') renderHistory();
     if (ui.tab === 'books') renderBooks();
+    if (ui.tab === 'settings') renderSettings();
     tick();
   }
   function setTab(tab) {
@@ -1532,6 +1612,7 @@ svg { display: block; }
         ui.importMode = el.dataset.action === 'import' ? 'replace' : 'merge';
         $('#importFile').value = ''; $('#importFile').click(); break;
       case 'backfill': loadBackfill(); break;
+      case 'accent': setAccent(el.dataset.accent); break;
       case 'archive': case 'unarchive': {
         const b = data.books.find((x) => x.id === el.dataset.id);
         if (b) { b.archived = el.dataset.action === 'archive'; persist(); renderBooks(); toast(b.archived ? 'Archived' : 'Back on the shelf'); }
@@ -1600,6 +1681,7 @@ svg { display: block; }
   data = loaded.data;
   timer = C.loadTimer(storage);
   const dr = jget(DRAFT_KEY);
+  ui.accent = sget(ACCENT_KEY) || 'green';
   ui.draft = dr && C.TYPES.includes(dr.type) ? { type: dr.type, title: typeof dr.title === 'string' ? dr.title : '' } : { type: 'book', title: '' };
   renderTabs();
   renderAll();

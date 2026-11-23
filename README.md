@@ -1,7 +1,7 @@
 # READ.LOG
 
 A tiny reading timer + log for your iPhone Home Screen, dressed as a vintage 1-bit Mac
-with a pixel mouse for company. Pick what you're reading, hit START, hit STOP when you're
+with a pixel mouse for company (and an accent color you pick: Game Boy green by default). Pick what you're reading, hit START, hit STOP when you're
 done, and log it. It works toward a daily goal (1 hour by default), works offline, and
 keeps all data on your phone.
 
@@ -59,26 +59,26 @@ whatever you named the repo).
   logging in the installed app.**
 - Data lives **only on your phone**. Deleting the app from your Home Screen deletes its
   data too.
-- **Back up now and then:** BOOKS tab → PREFS.CFG → **EXPORT** → *Save to Files*
-  (iCloud Drive is a good spot). To restore: **IMPORT** and pick that file.
+- **Back up now and then:** SETTINGS tab → **EXPORT DATA [ JSON ]** → *Save to Files*
+  (iCloud Drive is a good spot). To restore: **RESTORE BACKUP [ IMPORT ]** and pick that file.
 
 ## Updating an installed copy (e.g. this restyle)
 
 The app updates itself in the background, but the **Home Screen icon and name only
 change when you re-add it**, and re-adding wipes the app's data. So:
 
-1. In the **installed** app: **EXPORT** a backup (BOOKS → PREFS.CFG) and save it to Files.
+1. In the **installed** app: **EXPORT** a backup (SETTINGS → EXPORT DATA) and save it to Files.
    Old backups still import fine: the app upgrades them automatically.
 2. Push the new version (`git push`) and wait a minute or two for GitHub Pages.
 3. Long-press the old Home Screen icon → **Remove App** → **Delete from Home Screen**.
 4. In Safari, open your URL, pull down to refresh, then Share → **Add to Home Screen**.
-5. Open the new app → BOOKS → PREFS.CFG → **IMPORT** → pick your backup.
+5. Open the new app → SETTINGS → **RESTORE BACKUP** → pick your backup.
 
 If you don't care about the new icon, you can skip all that: just open the installed app
 twice (once to download the update in the background, once to see it).
 
 Developer note: whenever you change files, bump the cache name in `sw.js`
-(`reading-log-v3` → `reading-log-v4`) so old files are cleared out.
+(`reading-log-v4` → `reading-log-v5`) so old files are cleared out.
 
 ## How it works
 
@@ -97,7 +97,7 @@ Developer note: whenever you change files, bump the cache name in `sw.js`
 - **TODAY'S LOG.** Today's sessions, with today's total vs. goal in the title bar
   (e.g. `38/60 MIN`, counting the running chunk). When you cross the goal the mouse
   cheers once — right away if the app is open, otherwise the next time you open Home.
-- **The day starts at 3:00 AM** (PREFS.CFG → DAY STARTS AT, adjustable by the hour).
+- **The day starts at 3:00 AM** (SETTINGS → DAY STARTS AT, adjustable by the hour).
   Reading at 12:37 AM still counts for the day before, and the header shows that date.
   A timed session counts entirely for the day it *started*, even if it runs past 3 AM.
   Manual entries keep the date you gave them, even if you change the setting later.
@@ -111,13 +111,17 @@ Developer note: whenever you change files, bump the cache name in `sw.js`
   (rose = goal hit, checkerboard = partial, empty = missed), streak and week total. Tap
   any row to edit or delete it.
 - **BOOKS.** Total time, last page and session count per book; add or archive books.
-  PREFS.CFG has the daily goal, day start, **EXPORT**, **IMPORT** (replaces everything
+- **SETTINGS.** ACCENT_COLOR picks the accent (yellow, green, blue, red, or mono for
+  all-gray); it colors the book the mouse reads, buttons, the timer and streaks, and is
+  saved on the phone (`readlog.accent`). PREFERENCES has the daily goal, day start, **EXPORT**, **IMPORT** (replaces everything
   with a backup), **IMPORT ENTRIES** (merges a file in: only adds entries whose ids
   aren't already there, so it's safe to run twice) and **LOAD BACKFILL.JSON** (merges the
   `backfill.json` shipped with the app: Nov 15–22, 2026).
 
 ## For tinkering
 
+- **The mouse** is a 14×16 grid in `index.html` with sleep / read / cool moods (cool =
+  sunglasses once today's goal is hit). The home scene has a pixel bookshelf.
 - **Run it locally:** `python3 -m http.server 8765` in this folder, then open
   <http://localhost:8765>.
 - **Tests:** `npm test` (needs Node 18+, runs in America/Chicago time). Covers the 3 AM
@@ -126,7 +130,8 @@ Developer note: whenever you change files, bump the cache name in `sw.js`
   streak, the timer (reload while running, STOP-without-saving, discard), v1 → v2 data
   migration, and the mouse grid. The tested logic lives in `index.html` between `/*CORE-START*/` and `/*CORE-END*/`.
 - **Icons:** `npm run icons` redraws the PNGs from the mouse grid in `index.html`
-  (nearest-neighbour, whole pixels per cell).
+  (nearest-neighbour, whole pixels per cell). The shipped icons still show the older
+  mouse; regenerating them means re-adding the Home Screen app to see the change.
 - **Storage:** `localStorage` keys `readinglog.data` (schema 2; v1 data and backups are
   upgraded on load), `readinglog.timer`, plus small UI keys (`readinglog.draft`, `.saveform`,
   `.cheered`). If saved data is ever unreadable, the raw copy is kept under
