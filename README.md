@@ -87,7 +87,10 @@ Developer note: whenever you change files, bump the cache name in `sw.js`
   you've logged before it says **PICK UP AT p.NN**. Tap **START**.
 - **Running.** The mouse reads; the CRT counts up from 00:00 with no cap. The timer is
   based on timestamps, so it keeps counting if your phone locks or you close the app.
-  **STOP** ends the chunk (there's no pause — each chunk is one start/stop).
+  **PAUSE** freezes it for a break (the mouse holds still); **RESUME** carries on in the
+  same session, and break time doesn't count. **STOP** ends the session and opens the
+  save screen. A paused session survives closing the app, and counts for the day it
+  started.
 - **SAVE_SESSION.** Shows the time read. For books, a PAGES field prefilled with where you
   left off (e.g. `80-`); finish it as `80-95`. It also takes several ranges and roman
   numerals (`xi-xxxi, 3-32`) and shows "= N PAGES THIS SESSION" (each range counts

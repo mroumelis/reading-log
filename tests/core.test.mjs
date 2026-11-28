@@ -307,6 +307,66 @@ test('reload while running keeps counting while the app is closed', () => {
   assert.deepEqual(plain(r.material), HOBBIT);
 });
 
+test('PAUSE then RESUME: paused time doesn’t count and nothing is logged', () => {
+  const T = at('2026-11-27T20:00');
+  let t = C.start(C.idleTimer(), T, HOBBIT);
+  t = C.hold(t, T + 10 * MIN);
+  assert.equal(t.status, 'hold');
+  assert.deepEqual(plain(t.material), HOBBIT, 'still the same book');
+  assert.equal(C.elapsed(t, T + 40 * MIN), 10 * MIN, 'frozen while paused');
+  t = C.start(t, T + 40 * MIN); // RESUME after a 30-minute break
+  assert.equal(t.status, 'running');
+  assert.equal(C.elapsed(t, T + 55 * MIN), 25 * MIN);
+  t = C.hold(t, T + 55 * MIN);
+  t = C.start(t, T + 60 * MIN);
+  t = C.stop(t, T + 65 * MIN);
+  assert.equal(t.status, 'paused', 'STOP goes to the save screen');
+  const d = C.draftFromTimer(t, T + 90 * MIN);
+  assert.equal(d.durationMs, 30 * MIN, '10 + 15 + 5 minutes, breaks left out');
+  assert.equal(d.startedAt, T);
+  assert.equal(d.endedAt, T + 65 * MIN);
+});
+
+test('STOP while paused ends the session at the moment you paused', () => {
+  const T = at('2026-11-27T20:00');
+  const t = C.stop(C.hold(C.start(C.idleTimer(), T, HOBBIT), T + 12 * MIN), T + 50 * MIN);
+  assert.equal(t.status, 'paused');
+  const d = C.draftFromTimer(t, T + 50 * MIN);
+  assert.equal(d.durationMs, 12 * MIN);
+  assert.equal(d.endedAt, T + 12 * MIN);
+});
+
+test('pause / resume / stop are no-ops in the wrong state', () => {
+  const T = at('2026-11-27T20:00');
+  const idle = C.idleTimer();
+  assert.equal(C.hold(idle, T), idle);
+  assert.equal(C.stop(idle, T), idle);
+  const held = C.hold(C.start(idle, T), T + MIN);
+  assert.equal(C.hold(held, T + 2 * MIN), held, 'pausing twice does nothing');
+});
+
+test('reload while paused: still paused, time still frozen, resume works', () => {
+  const st = memStorage();
+  const T = at('2026-11-27T20:00');
+  C.saveTimer(st, C.hold(C.start(C.idleTimer(), T, HOBBIT), T + 8 * MIN));
+  const r = C.loadTimer(st);
+  assert.equal(r.status, 'hold');
+  assert.equal(C.elapsed(r, T + 300 * MIN), 8 * MIN);
+  assert.deepEqual(plain(r.material), HOBBIT);
+  assert.equal(C.elapsed(C.start(r, T + 300 * MIN), T + 302 * MIN), 10 * MIN);
+});
+
+test('a paused session counts toward the day it started (3 AM rule), not the day you resume', () => {
+  const data = C.freshData();
+  let t = C.start(C.idleTimer(), at('2026-11-27T23:30'), HOBBIT); // Nov 27
+  t = C.hold(t, at('2026-11-27T23:50'));
+  assert.equal(C.todayTotal(data, t, at('2026-11-27T23:55')), 20 * MIN, 'paused time still shows in today’s total');
+  t = C.start(t, at('2026-11-28T09:00')); // resumed the next morning (logical Nov 28)
+  const totals = C.dayTotals(data, t, at('2026-11-28T09:10'));
+  assert.equal(totals['2026-11-27'], 30 * MIN);
+  assert.equal(totals['2026-11-28'], undefined);
+});
+
 test('STOP without saving, then reload: the unsaved chunk comes back frozen', () => {
   const st = memStorage();
   const T = at('2026-11-22T09:00');

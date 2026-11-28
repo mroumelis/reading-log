@@ -170,6 +170,8 @@ svg { display: block; }
 .crt-digits.long { font-size: 80px; }
 .crt-digits.sm { font-size: 56px; margin: 8px 0 0; }
 .rec { color: var(--accent); animation: blink 1.2s steps(1) infinite; }
+.crt-digits.held { animation: blink 1.2s steps(1) infinite; }
+.run-btns { margin-top: 0; }
 
 /* pages */
 .pages-sum { margin-top: 16px; font: 24px/1 var(--term); text-transform: uppercase; }
@@ -376,8 +378,10 @@ svg { display: block; }
   const today = (data, now) => logicalDay(now, dayStart(data));
 
   // ----- timer (timestamp based) -----
-  // { status: 'idle'|'running'|'paused', segments: [{start,end}], runStart: ts|null, material?: {type,title,fromPage} }
-  // 'paused' is the STOPPED state: the chunk is over and waiting to be saved or discarded.
+  // { status: 'idle'|'running'|'hold'|'paused', segments: [{start,end}], runStart: ts|null, material?: {type,title,fromPage} }
+  // 'hold'   = PAUSED mid-reading: nothing counts until RESUME; the session isn't over.
+  // 'paused' = STOPPED: the session is over and waiting to be saved or discarded.
+  //            (The name is kept so timers saved by older versions still load.)
   const idleTimer = () => ({ status: 'idle', segments: [], runStart: null });
   function start(t, now, material) {
     if (t.status === 'running') return t;
@@ -394,7 +398,17 @@ svg { display: block; }
     if (t.material) out.material = t.material;
     return out;
   }
-  const stop = pause;
+  // PAUSE while reading: close the current run, keep the session open.
+  function hold(t, now) {
+    if (t.status !== 'running') return t;
+    return Object.assign(pause(t, now), { status: 'hold' });
+  }
+  // STOP works from running or paused.
+  function stop(t, now) {
+    if (t.status === 'running') return pause(t, now);
+    if (t.status === 'hold') return Object.assign({}, t, { status: 'paused', segments: t.segments.slice() });
+    return t;
+  }
   function segmentsAt(t, now) {
     if (t.status !== 'running') return t.segments;
     return t.segments.concat([{ start: t.runStart, end: Math.max(now, t.runStart) }]);
@@ -783,7 +797,7 @@ svg { display: block; }
   function loadTimer(storage) {
     try {
       const t = JSON.parse(storage.getItem(TIMER_KEY) || 'null');
-      if (!t || !['idle', 'running', 'paused'].includes(t.status)) return idleTimer();
+      if (!t || !['idle', 'running', 'hold', 'paused'].includes(t.status)) return idleTimer();
       const segments = (Array.isArray(t.segments) ? t.segments : [])
         .filter((g) => g && Number.isFinite(g.start) && Number.isFinite(g.end) && g.end >= g.start)
         .map((g) => ({ start: g.start, end: g.end }));
@@ -793,7 +807,7 @@ svg { display: block; }
         if (!Number.isFinite(t.runStart)) return segments.length ? withMat({ status: 'paused', segments, runStart: null }) : idleTimer();
         return withMat({ status: 'running', segments, runStart: t.runStart });
       }
-      if (t.status === 'paused' && segments.length) return withMat({ status: 'paused', segments, runStart: null });
+      if ((t.status === 'paused' || t.status === 'hold') && segments.length) return withMat({ status: t.status, segments, runStart: null });
       return idleTimer();
     } catch (e) {
       return idleTimer();
@@ -840,7 +854,7 @@ svg { display: block; }
   root.Core = {
     SCHEMA, KEY, TIMER_KEY, MIN, TYPES, DEFAULT_DAY_START, uid,
     dayKey, addDays, parseDay, isDay, logicalDay, dayStart, today,
-    idleTimer, start, pause, stop, segmentsAt, elapsed, timerStart, draftFromTimer,
+    idleTimer, start, pause, hold, stop, segmentsAt, elapsed, timerStart, draftFromTimer,
     sessionDay, dayTotals, todayTotal, sessionNumber, shouldCheer, streak, week,
     displayOrder, readingOrder,
     romanToInt, intToRoman, parsePages, prettyPages, pagesCount,
@@ -873,6 +887,7 @@ svg { display: block; }
     gear: ['...X.X...', '.X.XXX.X.', '..XX.XX..', 'XXX...XXX', '.X.....X.', 'XXX...XXX', '..XX.XX..', '.X.XXX.X.', '...X.X...'],
     play: ['X......', 'XXX....', 'XXXXX..', 'XXXXXXX', 'XXXXX..', 'XXX....', 'X......'],
     stop: ['XXXXXX', 'XXXXXX', 'XXXXXX', 'XXXXXX', 'XXXXXX', 'XXXXXX'],
+    pause: ['XX..XX', 'XX..XX', 'XX..XX', 'XX..XX', 'XX..XX', 'XX..XX'],
     plus: ['..X..', '..X..', 'XXXXX', '..X..', '..X..'],
     minus: ['.....', '.....', 'XXXXX', '.....', '.....'],
   };
@@ -977,11 +992,12 @@ svg { display: block; }
     const now = Date.now();
     if (now < ui.cheerUntil) return 'cool!';
     if (timer.status === 'running') return 'read';
+    if (timer.status === 'hold') return 'read~'; // holding the book, not bobbing
     return C.todayTotal(data, timer, now) >= goalMs() ? 'cool' : 'sleep';
   }
   function sceneHTML(key) {
-    const mood = key.replace('!', '');
-    const anim = key === 'cool!' ? 'hop' : mood === 'read' ? 'bob' : '';
+    const mood = key.replace(/[!~]/g, '');
+    const anim = key === 'cool!' ? 'hop' : key === 'read' ? 'bob' : ''; // 'read~' = paused: holds still
     const label = { sleep: 'Pixel mouse, asleep', read: 'Pixel mouse, reading a book', cool: 'Pixel mouse in sunglasses: goal reached' }[mood];
     let html = mouseSVG(mood, 6, 'mouse ' + anim, null, label);
     if (mood === 'sleep') html += '<div class="zz" aria-hidden="true"><span>z</span><span>z</span></div>';
@@ -1060,7 +1076,7 @@ svg { display: block; }
 
   // ---------- HOME ----------
   function homeState() {
-    return timer.status === 'running' ? 'running' : timer.status === 'paused' ? 'save' : 'ready';
+    return timer.status === 'running' || timer.status === 'hold' ? 'running' : timer.status === 'paused' ? 'save' : 'ready';
   }
   function renderHome() {
     const st = homeState();
@@ -1102,16 +1118,17 @@ svg { display: block; }
     const meta = [TYPE_LABEL[m.type]];
     if (m.type === 'book' && Number.isFinite(m.fromPage)) meta.push(`FROM p.${m.fromPage}`);
     const n = C.sessionNumber(data, C.logicalDay(C.timerStart(timer) ?? Date.now(), dayHour()));
+    const held = timer.status === 'hold';
     return `<div class="scene" id="scene"></div>
-      <div class="lbl first">Now reading</div>
+      <div class="lbl first">${held ? 'Paused' : 'Now reading'}</div>
       <div class="now-title">${esc(m.title || 'Untitled')}</div>
       <div class="meta">${esc(meta.join(' · '))}</div>
       <div class="crt"><div class="bo"><div class="bi">
-        <div class="crt-top"><span>Session ${pad(n)}</span><span>[ <span class="rec">REC</span> ]</span></div>
-        <div class="crt-digits" id="crt" role="timer">00:00</div>
-        <div class="crt-bot">counting up</div>
+        <div class="crt-top"><span>Session ${pad(n)}</span><span>[ <span class="rec">${held ? 'PAUSED' : 'REC'}</span> ]</span></div>
+        <div class="crt-digits ${held ? 'held' : ''}" id="crt" role="timer">00:00</div>
+        <div class="crt-bot">${held ? 'not counting' : 'counting up'}</div>
       </div></div></div>
-      ${btn(icon('stop', 2) + 'Stop', 'stop', 'dark')}`;
+      <div class="btn-row run-btns">${held ? btn(icon('play', 2) + 'Resume', 'resume', 'primary') : btn(icon('pause', 2) + 'Pause', 'pause', '')}${btn(icon('stop', 2) + 'Stop', 'stop', 'dark')}</div>`;
   }
 
   // The STOPPED chunk's form. Kept in storage so closing the app mid-save loses nothing.
@@ -1583,6 +1600,10 @@ svg { display: block; }
       }
       case 'start': startReading(); break;
       case 'stop': stopReading(); break;
+      case 'pause':
+        timer = C.hold(timer, Date.now()); persistTimer(); renderHome(); tick(); break;
+      case 'resume':
+        timer = C.start(timer, Date.now()); persistTimer(); renderHome(); tick(); break;
       case 'stype':
         captureSave(); ui.save.type = el.dataset.type; persistSaveForm(); renderHome(); break;
       case 'save': saveSession(); break;

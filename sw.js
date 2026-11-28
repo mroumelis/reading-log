@@ -1,7 +1,7 @@
 // Offline support. Serves the app from the cache instantly, and refreshes the
 // cache in the background so the next launch picks up any new version.
 // When you change the app, bump CACHE so old files are cleared out.
-const CACHE = 'reading-log-v4';
+const CACHE = 'reading-log-v5';
 const ASSETS = [
   './',
   './index.html',
